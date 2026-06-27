@@ -161,6 +161,11 @@ class AuthController extends StateNotifier<AuthState> {
     state = const AuthState(initialized: true, isLoading: false);
   }
 
+  Future<void> refreshProfile() async {
+    final user = await _repo.refreshProfile();
+    state = state.copyWith(user: user);
+  }
+
   Future<void> handleUnauthorized() async {
     await _repo.clearSession();
     state = const AuthState(initialized: true, isLoading: false);

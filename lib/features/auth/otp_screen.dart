@@ -3,10 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../config/brand_assets.dart';
 import '../../config/theme.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/utils/auth_navigation.dart';
+import '../../shared/widgets/saco_logo.dart';
 import '../../shared/widgets/saco_buttons.dart';
 import 'auth_provider.dart';
 
@@ -99,11 +99,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/register'),
         ),
-        title: Image.asset(
-          BrandAssets.logoDark,
-          height: 32,
-          errorBuilder: (_, __, ___) => const Text('SacoStay'),
-        ),
+        title: SacoLogo(height: 32, onTap: () => context.go('/')),
         centerTitle: true,
       ),
       body: Padding(

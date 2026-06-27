@@ -7,6 +7,8 @@ import '../../config/theme.dart';
 import '../../core/utils/auth_navigation.dart';
 import '../../core/utils/user_display.dart';
 import '../../features/auth/auth_provider.dart';
+import '../../shared/widgets/saco_footer.dart';
+import '../../shared/widgets/saco_logo.dart';
 import '../../shared/widgets/saco_scaffold.dart';
 import 'home_faq_data.dart';
 
@@ -39,7 +41,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final landlordQuery = isLoggedIn ? null : landlordPostListingQueryParams();
 
     return SacoScaffold(
-      showFooter: true,
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -64,6 +65,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               landlordLink: landlordCtaLink,
               landlordQuery: landlordQuery,
             ),
+            const SacoFooter(),
           ],
         ),
       ),
@@ -74,22 +76,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 class _HeroBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 16 / 7,
-      child: Image.asset(
-        BrandAssets.heroBackground,
-        fit: BoxFit.cover,
-        alignment: Alignment.center,
-        errorBuilder: (_, __, ___) => Container(
-          color: SacoColors.sacoOrange.withValues(alpha: 0.15),
-          alignment: Alignment.center,
-          child: const Text(
-            'SacoStay',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: SacoColors.sacoBlue,
-            ),
+    final width = MediaQuery.sizeOf(context).width;
+    final isMobilePortrait = width < 640;
+
+    // Mirror web `.home-hero` mobile portrait sizing.
+    final height = isMobilePortrait
+        ? (width * 0.42).clamp(168.0, 224.0)
+        : width * 809 / 1942;
+
+    return ColoredBox(
+      color: SacoColors.pageBackground,
+      child: SizedBox(
+        width: double.infinity,
+        height: height,
+        child: Image.asset(
+          BrandAssets.heroBackground,
+          fit: BoxFit.contain,
+          alignment: Alignment.topCenter,
+          errorBuilder: (_, __, ___) => Container(
+            color: SacoColors.sacoOrange.withValues(alpha: 0.12),
+            alignment: Alignment.center,
+            child: const SacoLogo(height: 56),
           ),
         ),
       ),
@@ -101,8 +108,11 @@ class _HeroIntro extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.orange.shade50)),
+      ),
       child: const Text(
         'Cộng đồng sinh viên giúp bạn tìm phòng trọ đáng tin cậy và roommate phù hợp cho hành trình đại học.',
         textAlign: TextAlign.center,
@@ -115,46 +125,71 @@ class _HeroIntro extends StatelessWidget {
 class _FeatureSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return _SectionShell(
-      background: Colors.white,
-      title: 'Vì sao chọn SacoStay?',
-      subtitle: 'Nền tảng dành riêng cho sinh viên — minh bạch, an toàn và dễ bắt đầu.',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final w = constraints.maxWidth;
-          final crossCount = w >= 900 ? 4 : (w >= 500 ? 2 : 1);
-          return GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: crossCount,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: crossCount == 1 ? 1.6 : 1.1,
-            children: const [
-              _FeatureCard(
-                emoji: '🏠',
-                title: 'Tin đăng đã kiểm duyệt',
-                body:
-                    'Tin đăng được kiểm duyệt trước khi xuất hiện trên nền tảng nhằm hạn chế thông tin sai lệch.',
+    return Transform.translate(
+      offset: const Offset(0, -16),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 40, 20, 32),
+        child: Column(
+          children: [
+            const Text(
+              'Vì sao chọn SacoStay?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: SacoColors.sacoBlue,
               ),
-              _FeatureCard(
-                emoji: '👤',
-                title: 'Chủ trọ đã xác minh',
-                body: 'Chủ trọ được xác minh thông tin nhằm tăng độ tin cậy và minh bạch.',
-              ),
-              _FeatureCard(
-                emoji: '🤝',
-                title: 'Ghép roommate thông minh',
-                body: 'Tìm roommate phù hợp dựa trên nhu cầu, sở thích và thói quen sinh hoạt.',
-              ),
-              _FeatureCard(
-                emoji: '🎓',
-                title: 'Cộng đồng sinh viên',
-                body: 'Cộng đồng dành riêng cho sinh viên để chia sẻ kinh nghiệm thuê trọ.',
-              ),
-            ],
-          );
-        },
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Nền tảng dành riêng cho sinh viên — minh bạch, an toàn và dễ bắt đầu.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: SacoColors.sacoGray),
+            ),
+            const SizedBox(height: 24),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final w = constraints.maxWidth;
+                final crossCount = w >= 900 ? 4 : (w >= 500 ? 2 : 1);
+                return GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: crossCount,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: crossCount == 1 ? 1.6 : 1.1,
+                  children: const [
+                    _FeatureCard(
+                      emoji: '🏠',
+                      title: 'Tin đăng đã kiểm duyệt',
+                      body:
+                          'Tin đăng được kiểm duyệt trước khi xuất hiện trên nền tảng nhằm hạn chế thông tin sai lệch.',
+                    ),
+                    _FeatureCard(
+                      emoji: '👤',
+                      title: 'Chủ trọ đã xác minh',
+                      body: 'Chủ trọ được xác minh thông tin nhằm tăng độ tin cậy và minh bạch.',
+                    ),
+                    _FeatureCard(
+                      emoji: '🤝',
+                      title: 'Ghép roommate thông minh',
+                      body: 'Tìm roommate phù hợp dựa trên nhu cầu, sở thích và thói quen sinh hoạt.',
+                    ),
+                    _FeatureCard(
+                      emoji: '🎓',
+                      title: 'Cộng đồng sinh viên',
+                      body: 'Cộng đồng dành riêng cho sinh viên để chia sẻ kinh nghiệm thuê trọ.',
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

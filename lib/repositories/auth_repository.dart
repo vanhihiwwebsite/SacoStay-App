@@ -7,6 +7,7 @@ import '../core/api/api_exception.dart';
 import '../core/storage/token_storage.dart';
 import '../core/storage/user_prefs.dart';
 import '../core/utils/json_normalize.dart';
+import '../core/utils/user_display.dart';
 import '../models/user_profile.dart';
 
 class AuthRepository {
@@ -103,9 +104,18 @@ class AuthRepository {
   Future<UserProfile> getProfile() async {
     try {
       final response = await _dio.get<Map<String, dynamic>>('/Auth/profile');
-      final user = UserProfile.fromJson(
+      var user = UserProfile.fromJson(
         Map<String, dynamic>.from(response.data ?? {}),
       );
+      try {
+        final imgRes = await _dio.get<dynamic>('/User/profile-images');
+        final urls = profileImageUrlsFromApiList(imgRes.data);
+        if (urls.isNotEmpty) {
+          final raw = Map<String, dynamic>.from(user.raw);
+          raw['profileImages'] = urls;
+          user = UserProfile.fromJson(raw);
+        }
+      } catch (_) {}
       await _persistUser(user);
       return user;
     } on DioException catch (e) {
@@ -130,6 +140,12 @@ class AuthRepository {
     String? firstName,
     String? lastName,
     String? phoneNumber,
+    String? job,
+    String? livingArea,
+    String? bio,
+    String? dateOfBirth,
+    String? gender,
+    String? avatarFilePath,
   }) async {
     final fd = FormData();
     void append(String key, String? value) {
@@ -140,12 +156,95 @@ class AuthRepository {
     append('FirstName', firstName);
     append('LastName', lastName);
     append('PhoneNumber', phoneNumber);
+    append('Job', job);
+    append('LivingArea', livingArea);
+    append('Bio', bio);
+    append('DateOfBirth', dateOfBirth);
+
+    if (gender == 'male') {
+      fd.fields.add(const MapEntry('Gender', 'true'));
+    } else if (gender == 'female') {
+      fd.fields.add(const MapEntry('Gender', 'false'));
+    }
+
+    if (avatarFilePath != null && avatarFilePath.isNotEmpty) {
+      fd.files.add(
+        MapEntry(
+          'AvatarFile',
+          await MultipartFile.fromFile(avatarFilePath, filename: 'avatar.jpg'),
+        ),
+      );
+    }
 
     try {
       await _dio.put('/Auth/update-profile', data: fd);
     } on DioException catch (e) {
       throw ApiException(
         message: _extractErrorMessage(e) ?? 'Cập nhật hồ sơ thất bại.',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  Future<void> deleteProfileImage(String imageUrl) async {
+    try {
+      await _dio.delete(
+        '/Auth/delete-profile-image',
+        queryParameters: {'imageUrl': imageUrl},
+      );
+    } on DioException catch (e) {
+      throw ApiException(
+        message: _extractErrorMessage(e) ?? 'Xóa ảnh thất bại.',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  Future<void> forgotPassword(String email) async {
+    try {
+      await _dio.post(
+        '/Auth/forgot-password',
+        data: {'email': email},
+      );
+    } on DioException catch (e) {
+      throw ApiException(
+        message: _extractErrorMessage(e) ?? 'Gửi OTP thất bại. Thử lại sau.',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  Future<void> verifyResetOtp({required String email, required String otp}) async {
+    try {
+      await _dio.post(
+        '/Auth/verify-reset-otp',
+        data: {'email': email, 'otp': otp},
+      );
+    } on DioException catch (e) {
+      throw ApiException(
+        message: _extractErrorMessage(e) ?? 'OTP không hợp lệ. Thử lại sau.',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  Future<void> resetPassword({
+    required String email,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    try {
+      await _dio.post(
+        '/Auth/reset-password',
+        data: {
+          'email': email,
+          'newPassword': newPassword,
+          'confirmPassword': confirmPassword,
+        },
+      );
+    } on DioException catch (e) {
+      throw ApiException(
+        message: _extractErrorMessage(e) ?? 'Đặt lại mật khẩu thất bại.',
         statusCode: e.response?.statusCode,
       );
     }

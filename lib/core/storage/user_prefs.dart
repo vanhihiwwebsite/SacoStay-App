@@ -11,6 +11,7 @@ const tempFirstNameKey = 'temp_firstName';
 const tempLastNameKey = 'temp_lastName';
 const tempPhoneKey = 'temp_phone';
 const tempNameKey = 'temp_name';
+const resetEmailKey = 'reset_email';
 
 class UserPrefs {
   UserPrefs(this._prefs);
@@ -68,6 +69,13 @@ class UserPrefs {
   String? get tempLastName => _prefs.getString(tempLastNameKey);
   String? get tempPhone => _prefs.getString(tempPhoneKey);
 
+  String? get resetEmail => _prefs.getString(resetEmailKey);
+
+  Future<void> setResetEmail(String email) =>
+      _prefs.setString(resetEmailKey, email);
+
+  Future<void> clearResetEmail() => _prefs.remove(resetEmailKey);
+
   Future<void> clearTempRegister() async {
     await _prefs.remove(tempEmailKey);
     await _prefs.remove(tempPasswordKey);
@@ -83,6 +91,7 @@ class UserPrefs {
     await clearPendingRole();
     await clearAuthReturnUrl();
     await clearTempRegister();
+    await clearResetEmail();
     final keys = _prefs.getKeys().where((k) =>
         k.startsWith('saco_') || k.startsWith('temp_') || k == 'user');
     for (final key in keys) {

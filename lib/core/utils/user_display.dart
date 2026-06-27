@@ -1,3 +1,4 @@
+import 'media_url.dart';
 import 'json_normalize.dart';
 
 String displayNameFromUser(Map<String, dynamic>? user) {
@@ -83,8 +84,97 @@ String resolveUserRole(Map<String, dynamic>? user, {String? pendingRole}) {
 
 String? profileAvatarFromRaw(Map<String, dynamic>? user) {
   if (user == null) return null;
-  final avatar = strField(pickField(user, 'avatar', ['Avatar', 'AvatarUrl', 'avatarUrl']));
-  return avatar.isEmpty ? null : avatar;
+  final direct = strField(
+    pickField(user, 'avatar', ['Avatar', 'AvatarUrl', 'avatarUrl']),
+  );
+  if (direct.isNotEmpty) return direct;
+
+  final all = profileImagesListFromRaw(user);
+  for (final url in all) {
+    if (_isAvatarMediaUrl(url)) return url;
+  }
+
+  final personal = personalProfileImagesListFromRaw(user);
+  if (personal.isEmpty && all.isNotEmpty) return all.first;
+  return null;
+}
+
+/// URL hiển thị avatar — ưu tiên avatar, sau đó ảnh cá nhân đầu tiên.
+String resolveUserAvatarUrl(Map<String, dynamic>? user, {String? displayName}) {
+  final label = displayName ?? navProfileLabel(user);
+  final fromAvatar = profileAvatarFromRaw(user);
+  if (fromAvatar != null && fromAvatar.isNotEmpty) {
+    return resolveMediaUrl(fromAvatar);
+  }
+  final personal = personalProfileImagesListFromRaw(user);
+  if (personal.isNotEmpty) return resolveMediaUrl(personal.first);
+  return avatarFallbackUrl(label);
+}
+
+List<String> profileImageUrlsFromApiList(dynamic raw) {
+  if (raw is List) {
+    return raw
+        .map((item) {
+          if (item is String) return strField(item);
+          if (item is Map) {
+            final o = Map<String, dynamic>.from(item);
+            return strField(pickField(o, 'url', ['Url', 'imageUrl', 'ImageUrl']));
+          }
+          return '';
+        })
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+  if (raw is! Map) return [];
+  final o = Map<String, dynamic>.from(raw);
+  final nested = pickField(o, 'images', ['Images', 'data', 'Data']);
+  if (nested != null) return profileImageUrlsFromApiList(nested);
+  return [];
+}
+
+List<String> profileImagesListFromRaw(Map<String, dynamic>? user) {
+  if (user == null) return [];
+  final raw = pickField(
+    user,
+    'profileImages',
+    ['ProfileImages', 'profileImage', 'ProfileImage'],
+  );
+  if (raw is List) {
+    return profileImageUrlsFromApiList(raw);
+  }
+  if (raw is String && raw.isNotEmpty) return [raw];
+  return [];
+}
+
+List<String> personalProfileImagesListFromRaw(Map<String, dynamic>? user) {
+  final all = profileImagesListFromRaw(user)
+      .map((u) => resolveMediaUrl(u))
+      .where((s) => s.isNotEmpty)
+      .toList();
+  final personal = all.where((u) => _isPersonalProfileMediaUrl(u)).toList();
+  if (personal.isNotEmpty) return personal;
+  return [];
+}
+
+bool _isAvatarMediaUrl(String url) {
+  final lower = url.toLowerCase();
+  return lower.contains('/users/avatars/') ||
+      lower.contains('users/avatars') ||
+      lower.contains('users%2favatars') ||
+      lower.contains('/avatars/') ||
+      lower.contains('avatar');
+}
+
+bool _isPersonalProfileMediaUrl(String url) {
+  final lower = url.toLowerCase();
+  return lower.contains('/users/profile/') ||
+      lower.contains('/users/profiles/') ||
+      lower.contains('users/profile') ||
+      lower.contains('users/profiles') ||
+      lower.contains('users%2fprofile') ||
+      lower.contains('/profile-images/') ||
+      lower.contains('/personal/') ||
+      lower.contains('/user-images/');
 }
 
 bool hasBasicProfileFilled(Map<String, dynamic>? user) {
@@ -92,4 +182,34 @@ bool hasBasicProfileFilled(Map<String, dynamic>? user) {
   final fn = strField(pickField(user, 'firstName', ['FirstName']));
   final ln = strField(pickField(user, 'lastName', ['LastName']));
   return fn.isNotEmpty && ln.isNotEmpty;
+}
+
+({String firstName, String lastName}) profileFirstLastSeed(Map<String, dynamic>? user) {
+  if (user == null) return (firstName: '', lastName: '');
+  return (
+    firstName: strField(pickField(user, 'firstName', ['FirstName'])),
+    lastName: strField(pickField(user, 'lastName', ['LastName'])),
+  );
+}
+
+String profileDateOfBirthSeed(Map<String, dynamic>? user) {
+  if (user == null) return '';
+  final d = strField(pickField(user, 'dateOfBirth', ['DateOfBirth']));
+  if (d.isNotEmpty) return d.length >= 10 ? d.substring(0, 10) : d;
+  final age = num.tryParse(strField(pickField(user, 'age', ['Age'])));
+  if (age != null && age > 0 && age < 120) {
+    return '${DateTime.now().year - age.round()}-01-01';
+  }
+  return '';
+}
+
+String profileLivingAreaSeed(Map<String, dynamic>? user) {
+  if (user == null) return '';
+  return strField(pickField(user, 'livingArea', ['LivingArea']));
+}
+
+String genderToFormValue(dynamic g) {
+  if (g == true || g == 'male') return 'male';
+  if (g == false || g == 'female') return 'female';
+  return 'other';
 }

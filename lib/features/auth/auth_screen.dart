@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../config/brand_assets.dart';
 import '../../config/theme.dart';
+import '../../shared/widgets/saco_logo.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/utils/auth_navigation.dart';
 import '../../core/utils/user_display.dart';
@@ -42,6 +42,22 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool _showRegisterPassword = false;
   bool _showConfirmPassword = false;
   String _selectedRole = 'tenant';
+  String? _returnUrl;
+  String? _roleQuery;
+  bool _routeParamsSynced = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_routeParamsSynced) return;
+    _routeParamsSynced = true;
+    final params = GoRouterState.of(context).uri.queryParameters;
+    _returnUrl = params['returnUrl'];
+    _roleQuery = params['role'];
+    if (_roleQuery == 'landlord') {
+      _selectedRole = 'landlord';
+    }
+  }
 
   @override
   void dispose() {
@@ -57,21 +73,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     super.dispose();
   }
 
-  String? get _returnUrl =>
-      GoRouterState.of(context).uri.queryParameters['returnUrl'];
-
-  String? get _roleQuery =>
-      GoRouterState.of(context).uri.queryParameters['role'];
-
   bool get _requiresLandlordAuth => _roleQuery == 'landlord';
-
-  @override
-  void initState() {
-    super.initState();
-    if (_roleQuery == 'landlord') {
-      _selectedRole = 'landlord';
-    }
-  }
 
   Future<void> _submitLogin() async {
     final identifier = _loginIdentifier.text.trim();
@@ -236,20 +238,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 children: [
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: InkWell(
+                    child: SacoLogo(
+                      height: 40,
                       onTap: () => context.go('/'),
-                      child: Image.asset(
-                        BrandAssets.logoDark,
-                        height: 40,
-                        errorBuilder: (_, __, ___) => const Text(
-                          'SacoStay',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 22,
-                            color: SacoColors.sacoBlue,
-                          ),
-                        ),
-                      ),
                     ),
                   ),
                   const SizedBox(height: 16),

@@ -17,14 +17,37 @@ dependencies:
   shared_preferences: ^2.3.4
   google_fonts: ^6.2.1
   intl: ^0.20.2
+  url_launcher: ^6.3.1
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  signalr_netcore: ^1.4.0
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+  image: ^4.5.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: image/app_icon.png
+  # Android 8+ uses adaptive icons; without this the launcher shrinks legacy icons.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: image/app_icon.png
+  adaptive_icon_foreground_inset: 0
+  remove_alpha_ios: true
+  background_color_ios: "#FFFFFF"
+  web:
+    generate: true
+    image_path: image/app_icon.png
+    background_color: "#FFFFFF"
+    theme_color: "#FF9F43"
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/
-    - assets/images/Icon/
+    - image/
+    - image/Icon/

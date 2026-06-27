@@ -5,7 +5,22 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/auth_provider.dart';
 import '../features/auth/auth_screen.dart';
 import '../features/auth/otp_screen.dart';
+import '../features/discovery/discovery_screen.dart';
+import '../features/discovery/lifestyle_quiz_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/map/map_screen.dart';
+import '../features/auth/forgot_password_screen.dart';
+import '../features/auth/reset_password_screen.dart';
+import '../features/auth/verify_reset_otp_screen.dart';
+import '../features/onboarding/identity_verification_screen.dart';
+import '../features/chat/chat_screen.dart';
+import '../features/pricing/tenant_pricing_screen.dart';
+import '../features/legal/faq_screen.dart';
+import '../features/legal/terms_screen.dart';
+import '../features/profile/profile_setup_screen.dart';
+import '../features/profile/user_profile_screen.dart';
+import '../features/rooms/room_detail_screen.dart';
+import '../features/rooms/rooms_screen.dart';
 import '../shared/widgets/placeholder_screen.dart';
 import '../shared/widgets/saco_scaffold.dart';
 
@@ -24,7 +39,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           path == '/register' ||
           path == '/auth' ||
           path == '/otp-verification' ||
-          path == '/forgot-password';
+          path == '/forgot-password' ||
+          path == '/verify-reset-otp' ||
+          path == '/reset-password';
 
       if (!auth.initialized) return null;
 
@@ -40,6 +57,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/create-listing',
         '/my-listings',
         '/profile-setup',
+        '/profile',
         '/identity-verification',
         '/admin',
       ];
@@ -73,48 +91,45 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/forgot-password',
-        builder: (_, __) => const SacoScaffold(
-          body: PlaceholderScreen(
-            title: 'Quên mật khẩu',
-            subtitle: 'Tính năng sẽ được bổ sung trong phiên bản tiếp theo.',
-          ),
-        ),
+        builder: (_, __) => const SacoScaffold(body: ForgotPasswordScreen()),
+      ),
+      GoRoute(
+        path: '/verify-reset-otp',
+        builder: (_, __) => const SacoScaffold(body: VerifyResetOtpScreen()),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (_, __) => const SacoScaffold(body: ResetPasswordScreen()),
       ),
       GoRoute(
         path: '/discovery',
-        builder: (_, __) => const SacoScaffold(
-          body: PlaceholderScreen(
-            title: 'Tìm bạn ở ghép',
-            subtitle: 'Discovery swipe deck — Phase 3.',
-          ),
-        ),
+        builder: (_, __) => const SacoScaffold(body: DiscoveryScreen()),
+      ),
+      GoRoute(
+        path: '/lifestyle-quiz',
+        builder: (_, __) => const SacoScaffold(body: LifestyleQuizScreen()),
       ),
       GoRoute(
         path: '/rooms',
-        builder: (_, __) => const SacoScaffold(
-          body: PlaceholderScreen(
-            title: 'Phòng trọ',
-            subtitle: 'Danh sách phòng — Phase 3.',
-          ),
+        builder: (_, __) => const SacoScaffold(body: RoomsScreen()),
+      ),
+      GoRoute(
+        path: '/rooms/:id',
+        builder: (_, state) => SacoScaffold(
+          body: RoomDetailScreen(roomId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
         path: '/map',
-        builder: (_, __) => const SacoScaffold(
-          body: PlaceholderScreen(title: 'Bản đồ', subtitle: 'Map — Phase 2.'),
-        ),
+        builder: (_, __) => const SacoScaffold(body: MapScreen()),
       ),
       GoRoute(
         path: '/chat',
-        builder: (_, __) => const SacoScaffold(
-          body: PlaceholderScreen(title: 'Tin nhắn', subtitle: 'Chat — Phase 3.'),
-        ),
+        builder: (_, __) => const SacoScaffold(body: ChatScreen()),
       ),
       GoRoute(
         path: '/tenant-pricing',
-        builder: (_, __) => const SacoScaffold(
-          body: PlaceholderScreen(title: 'Bảng giá Premium'),
-        ),
+        builder: (_, __) => const SacoScaffold(body: TenantPricingScreen()),
       ),
       GoRoute(
         path: '/landlord-profile',
@@ -130,15 +145,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/profile-setup',
-        builder: (_, __) => const SacoScaffold(
-          body: PlaceholderScreen(title: 'Thiết lập hồ sơ'),
+        builder: (_, __) => const SacoScaffold(body: ProfileSetupScreen()),
+      ),
+      GoRoute(
+        path: '/profile/me',
+        builder: (_, __) => const SacoScaffold(body: UserProfileScreen()),
+      ),
+      GoRoute(
+        path: '/profile/:id',
+        builder: (_, state) => SacoScaffold(
+          body: UserProfileScreen(userId: state.pathParameters['id']),
         ),
       ),
       GoRoute(
         path: '/identity-verification',
-        builder: (_, __) => const SacoScaffold(
-          body: PlaceholderScreen(title: 'Xác minh danh tính (eKYC)'),
-        ),
+        builder: (_, __) => const SacoScaffold(body: IdentityVerificationScreen()),
       ),
       GoRoute(
         path: '/admin',
@@ -148,21 +169,41 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/faq',
-        builder: (_, __) => const SacoScaffold(
-          body: PlaceholderScreen(title: 'FAQ'),
+        builder: (_, __) => const SacoScaffold(body: FaqScreen()),
+      ),
+      GoRoute(
+        path: '/faq/:id',
+        builder: (_, state) => SacoScaffold(
+          body: FaqDetailScreen(id: state.pathParameters['id']!),
         ),
+      ),
+      GoRoute(
+        path: '/roommate-matching',
+        redirect: (_, __) => '/faq/roommate-matching',
+      ),
+      GoRoute(
+        path: '/verified-listings',
+        redirect: (_, __) => '/faq/verified-listings',
+      ),
+      GoRoute(
+        path: '/help/contact-landlord',
+        redirect: (_, __) => '/faq/contact-landlord',
+      ),
+      GoRoute(
+        path: '/help/roommate-support',
+        redirect: (_, __) => '/faq/roommate-support',
       ),
       GoRoute(
         path: '/terms',
-        builder: (_, __) => const SacoScaffold(
-          body: PlaceholderScreen(title: 'Điều khoản sử dụng'),
-        ),
+        builder: (_, __) => const SacoScaffold(body: TermsScreen()),
+      ),
+      GoRoute(
+        path: '/privacy',
+        redirect: (_, __) => '/terms',
       ),
       GoRoute(
         path: '/pricing',
-        builder: (_, __) => const SacoScaffold(
-          body: PlaceholderScreen(title: 'Bảng giá dịch vụ'),
-        ),
+        redirect: (_, __) => '/tenant-pricing',
       ),
     ],
   );

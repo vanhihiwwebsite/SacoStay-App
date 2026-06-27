@@ -6,9 +6,10 @@ import '../../config/brand_assets.dart';
 import '../../config/theme.dart';
 import '../../core/utils/auth_navigation.dart';
 import '../../core/utils/json_normalize.dart';
-import '../../core/utils/media_url.dart';
 import '../../core/utils/user_display.dart';
 import '../../features/auth/auth_provider.dart';
+import '../../repositories/notification_repository.dart';
+import 'saco_logo.dart';
 
 class NavLinkItem {
   const NavLinkItem({
@@ -76,9 +77,11 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
     final user = auth.user?.raw;
     final visibleLinks = _links.where((l) => l.roles.contains(role)).toList();
     final currentPath = GoRouterState.of(context).uri.path;
+    final isMobile = MediaQuery.sizeOf(context).width < 640;
+    final showPostBtn = _showPostListingBtn(isLoggedIn, role, currentPath);
 
     return Material(
-      color: Colors.white.withValues(alpha: 0.92),
+      color: Colors.white.withValues(alpha: 0.95),
       elevation: 0,
       child: Container(
         decoration: BoxDecoration(
@@ -89,78 +92,62 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: Row(
                   children: [
-                    InkWell(
+                    SacoLogo(
+                      height: isMobile ? 40 : 48,
                       onTap: () => context.go('/'),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.asset(
-                        BrandAssets.logoDark,
-                        height: 36,
-                        errorBuilder: (_, __, ___) => const Text(
-                          'SacoStay',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: SacoColors.sacoBlue,
-                            fontSize: 20,
-                          ),
-                        ),
-                      ),
                     ),
                     const Spacer(),
-                    if (MediaQuery.sizeOf(context).width >= 640)
+                    if (!isMobile) ...[
                       ...visibleLinks.map(
                         (link) => _DesktopNavItem(
                           link: link,
                           isActive: currentPath == link.path,
-                          isLoggedIn: isLoggedIn,
                           onTap: () => _navigateLink(context, link, isLoggedIn),
                         ),
                       ),
-                    if (_showPostListingBtn(isLoggedIn, role, currentPath))
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: FilledButton.icon(
+                      if (showPostBtn) ...[
+                        const SizedBox(width: 8),
+                        _PostListingButton(
+                          compact: false,
                           onPressed: () => _onPostListing(context, isLoggedIn),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: SacoColors.sacoOrange,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
-                          ),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Đăng tin'),
                         ),
-                      ),
-                    if (MediaQuery.sizeOf(context).width < 640)
-                      IconButton(
-                        onPressed: () => setState(() => _menuOpen = !_menuOpen),
-                        icon: Icon(_menuOpen ? Icons.close : Icons.menu),
-                        color: SacoColors.sacoGray,
-                      )
-                    else
+                      ],
                       _AuthActions(
                         isLoggedIn: isLoggedIn,
                         user: user,
+                        onProfile: () => context.go('/profile/me'),
                         onLogout: () =>
                             ref.read(authControllerProvider.notifier).logout(),
                       ),
+                    ] else ...[
+                      if (showPostBtn) ...[
+                        _PostListingButton(
+                          compact: true,
+                          onPressed: () => _onPostListing(context, isLoggedIn),
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      IconButton(
+                        onPressed: () => setState(() => _menuOpen = !_menuOpen),
+                        icon: Icon(
+                          _menuOpen ? Icons.close : Icons.menu,
+                          color: SacoColors.sacoGray,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-              if (_menuOpen && MediaQuery.sizeOf(context).width < 640)
+              if (_menuOpen && isMobile)
                 _MobileMenu(
                   links: visibleLinks,
                   currentPath: currentPath,
                   isLoggedIn: isLoggedIn,
                   user: user,
-                  showPostListing: _showPostListingBtn(isLoggedIn, role, currentPath),
-                  onNavigate: (path) {
-                    setState(() => _menuOpen = false);
-                    context.go(path);
-                  },
+                  showPostListing: showPostBtn,
                   onNavLink: (link) {
                     setState(() => _menuOpen = false);
                     _navigateLink(context, link, isLoggedIn);
@@ -168,6 +155,10 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
                   onPostListing: () {
                     setState(() => _menuOpen = false);
                     _onPostListing(context, isLoggedIn);
+                  },
+                  onNavigate: (path) {
+                    setState(() => _menuOpen = false);
+                    context.go(path);
                   },
                   onLogout: () {
                     setState(() => _menuOpen = false);
@@ -210,17 +201,72 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
   }
 }
 
+class _PostListingButton extends StatelessWidget {
+  const _PostListingButton({
+    required this.onPressed,
+    required this.compact,
+  });
+
+  final VoidCallback onPressed;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [SacoColors.sacoOrange, SacoColors.sacoOrangeDark],
+        ),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: SacoColors.sacoOrange.withValues(alpha: 0.35),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(999),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 14 : 20,
+              vertical: compact ? 8 : 10,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.add, color: Colors.white, size: 18),
+                const SizedBox(width: 4),
+                Text(
+                  'Đăng tin',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: compact ? 13 : 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DesktopNavItem extends StatelessWidget {
   const _DesktopNavItem({
     required this.link,
     required this.isActive,
-    required this.isLoggedIn,
     required this.onTap,
   });
 
   final NavLinkItem link;
   final bool isActive;
-  final bool isLoggedIn;
   final VoidCallback onTap;
 
   @override
@@ -257,56 +303,81 @@ class _DesktopNavItem extends StatelessWidget {
   }
 }
 
-class _AuthActions extends StatelessWidget {
+class _AuthActions extends ConsumerWidget {
   const _AuthActions({
     required this.isLoggedIn,
     required this.user,
+    required this.onProfile,
     required this.onLogout,
   });
 
   final bool isLoggedIn;
   final Map<String, dynamic>? user;
+  final VoidCallback onProfile;
   final VoidCallback onLogout;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (!isLoggedIn) {
       return Row(
         children: [
-          TextButton(
+          TextButton.icon(
             onPressed: () => context.go('/login'),
-            child: const Text('Đăng nhập'),
+            icon: Image.asset(BrandAssets.iconLogin, width: 16, height: 16),
+            label: const Text('Đăng nhập'),
           ),
-          TextButton(
+          TextButton.icon(
             onPressed: () => context.go('/register'),
-            child: const Text('Đăng ký'),
+            icon: Image.asset(BrandAssets.iconRegister, width: 16, height: 16),
+            label: const Text('Đăng ký'),
           ),
         ],
       );
     }
 
     final label = navProfileLabel(user);
-    final avatar = profileAvatarFromRaw(user);
-    final avatarUrl = avatar != null ? resolveMediaUrl(avatar) : avatarFallbackUrl(label);
+    final avatarUrl = resolveUserAvatarUrl(user, displayName: label);
+    final unreadAsync = ref.watch(unreadNotificationCountProvider);
+    final unread = unreadAsync.value ?? 0;
 
     return Row(
       children: [
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundImage: NetworkImage(avatarUrl),
-              backgroundColor: Colors.orange.shade100,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                color: SacoColors.sacoBlue,
+        IconButton(
+          onPressed: () {},
+          tooltip: 'Thông báo',
+          icon: Badge(
+            isLabelVisible: unread > 0,
+            label: Text('$unread'),
+            child: const Icon(Icons.notifications_outlined),
+          ),
+        ),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onProfile,
+            borderRadius: BorderRadius.circular(24),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundImage: NetworkImage(avatarUrl),
+                    backgroundColor: Colors.orange.shade100,
+                    onBackgroundImageError: (_, __) {},
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: SacoColors.sacoBlue,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
         IconButton(
           onPressed: onLogout,
@@ -319,7 +390,7 @@ class _AuthActions extends StatelessWidget {
   }
 }
 
-class _MobileMenu extends StatelessWidget {
+class _MobileMenu extends ConsumerWidget {
   const _MobileMenu({
     required this.links,
     required this.currentPath,
@@ -343,62 +414,155 @@ class _MobileMenu extends StatelessWidget {
   final VoidCallback onLogout;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(unreadNotificationCountProvider).value ?? 0;
+    final label = navProfileLabel(user);
+    final avatarUrl = resolveUserAvatarUrl(user, displayName: label);
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: Colors.orange.shade100)),
       ),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ...links.map((link) {
             final active = currentPath == link.path;
-            return ListTile(
-              leading: link.iconAsset != null
-                  ? Image.asset(link.iconAsset!, width: 22, height: 22)
-                  : const Icon(Icons.admin_panel_settings_outlined),
-              title: Text(link.name),
-              selected: active,
-              selectedTileColor: SacoColors.pageBackground,
-              onTap: () => onNavLink(link),
-            );
-          }),
-          if (showPostListing)
-            FilledButton.icon(
-              onPressed: onPostListing,
-              icon: const Icon(Icons.add),
-              label: const Text('Đăng tin'),
-              style: FilledButton.styleFrom(backgroundColor: SacoColors.sacoOrange),
-            ),
-          const SizedBox(height: 8),
-          if (isLoggedIn)
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: Text(navProfileLabel(user)),
-              subtitle: Text(strField(user?['email'])),
-              onTap: onLogout,
-            )
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => onNavigate('/login'),
-                    child: const Text('Đăng nhập'),
+            return Material(
+              color: active ? SacoColors.pageBackground : Colors.white,
+              child: InkWell(
+                onTap: () => onNavLink(link),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  child: Row(
+                    children: [
+                      if (link.iconAsset != null)
+                        Image.asset(link.iconAsset!, width: 22, height: 22),
+                      if (link.iconAsset != null) const SizedBox(width: 12),
+                      Text(
+                        link.name,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: active ? SacoColors.sacoOrange : SacoColors.sacoGray,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => onNavigate('/register'),
-                    child: const Text('Đăng ký'),
+              ),
+            );
+          }),
+          if (showPostListing) ...[
+            const SizedBox(height: 8),
+            _PostListingButton(compact: false, onPressed: onPostListing),
+          ],
+          const SizedBox(height: 12),
+          Divider(color: Colors.orange.shade100),
+          const SizedBox(height: 8),
+          if (isLoggedIn)
+            Material(
+              color: Colors.white,
+              child: InkWell(
+                onTap: () => onNavigate('/profile/me'),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      Badge(
+                        isLabelVisible: unread > 0,
+                        label: Text('$unread'),
+                        child: const Icon(Icons.notifications_outlined, size: 22),
+                      ),
+                      const SizedBox(width: 10),
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundImage: NetworkImage(avatarUrl),
+                        backgroundColor: Colors.orange.shade100,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              label,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                            Text(
+                              strField(user?['email']),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.logout),
+                        onPressed: onLogout,
+                      ),
+                    ],
                   ),
+                ),
+              ),
+            )
+          else
+            Column(
+              children: [
+                _MobileAuthButton(
+                  label: 'Đăng nhập',
+                  iconAsset: BrandAssets.iconLogin,
+                  onTap: () => onNavigate('/login'),
+                ),
+                const SizedBox(height: 10),
+                _MobileAuthButton(
+                  label: 'Đăng ký',
+                  iconAsset: BrandAssets.iconRegister,
+                  onTap: () => onNavigate('/register'),
                 ),
               ],
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileAuthButton extends StatelessWidget {
+  const _MobileAuthButton({
+    required this.label,
+    required this.iconAsset,
+    required this.onTap,
+  });
+
+  final String label;
+  final String iconAsset;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: SacoColors.sacoBlue,
+        side: BorderSide(color: Colors.orange.shade100),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Image.asset(iconAsset, width: 16, height: 16),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
       ),
     );
