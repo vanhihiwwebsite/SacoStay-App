@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/utils/json_normalize.dart';
-import '../core/utils/media_url.dart';
+import '../core/utils/user_display.dart';
 import '../features/auth/auth_provider.dart';
 import '../models/chat.dart';
 
@@ -45,19 +45,12 @@ class ChatRepository {
       );
       if (response.data is Map) {
         final o = Map<String, dynamic>.from(response.data as Map);
-        final name = strField(
-          pickField(o, 'firstName', ['FirstName']),
-        );
-        final ln = strField(pickField(o, 'lastName', ['LastName']));
-        final display = [name, ln].where((s) => s.isNotEmpty).join(' ').trim();
-        final avatar = strField(
-          pickField(o, 'avatar', ['Avatar', 'AvatarUrl', 'avatarUrl']),
-        );
+        final name = navProfileLabel(o);
         final roles = listOfStrings(o['roles'] ?? o['Roles']);
         return ChatParticipant(
           id: userId,
-          displayName: display.isNotEmpty ? display : 'Người dùng',
-          avatarUrl: avatar.isNotEmpty ? resolveMediaUrl(avatar) : null,
+          displayName: name,
+          avatarUrl: resolveUserAvatarUrl(o, displayName: name),
           roles: roles,
         );
       }

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/theme.dart';
 import '../../features/auth/auth_provider.dart';
+import '../../features/payment/payment_config.dart';
+import '../../shared/widgets/saco_landlord_ui.dart';
 import '../../repositories/lifestyle_repository.dart';
-import '../../repositories/payment_repository.dart';
 
 class TenantPricingScreen extends ConsumerStatefulWidget {
   const TenantPricingScreen({super.key});
@@ -17,9 +17,7 @@ class TenantPricingScreen extends ConsumerStatefulWidget {
 
 class _TenantPricingScreenState extends ConsumerState<TenantPricingScreen> {
   bool _loading = true;
-  bool _paying = false;
   bool _isPremium = false;
-  String? _error;
 
   static const _features = [
     ('Lượt matching', '5 lượt/tuần', 'Không giới hạn'),
@@ -55,23 +53,15 @@ class _TenantPricingScreenState extends ConsumerState<TenantPricingScreen> {
       context.go('/login?returnUrl=/tenant-pricing');
       return;
     }
-    setState(() {
-      _paying = true;
-      _error = null;
-    });
-    try {
-      final url = await ref.read(paymentRepositoryProvider).buyTenantPremium();
-      final uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        throw Exception('Không mở được trang thanh toán');
-      }
-    } catch (e) {
-      setState(() => _error = e.toString());
-    } finally {
-      setState(() => _paying = false);
-    }
+    context.go(
+      Uri(
+        path: '/payment/checkout',
+        queryParameters: {
+          'package': PaymentCheckoutPackage.tenantPremium.label,
+          'context': PaymentContext.tenant.queryValue,
+        },
+      ).toString(),
+    );
   }
 
   @override
@@ -109,11 +99,18 @@ class _TenantPricingScreenState extends ConsumerState<TenantPricingScreen> {
             style: TextStyle(color: Colors.grey.shade600),
           ),
           const SizedBox(height: 24),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(_error!, style: const TextStyle(color: Colors.red)),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(12),
             ),
+            child: const Text(
+              'Thanh toán đang ở chế độ giao diện demo — backend PayOS tạm bảo trì.',
+              style: TextStyle(fontSize: 13),
+            ),
+          ),
+          const SizedBox(height: 16),
           _planCard(
             title: 'FREEMIUM',
             price: 'Miễn phí',
@@ -156,45 +153,75 @@ class _TenantPricingScreenState extends ConsumerState<TenantPricingScreen> {
                   )
                 else
                   FilledButton(
-                    onPressed: _paying ? null : _upgrade,
+                    onPressed: _upgrade,
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFFFFBD59),
                       minimumSize: const Size.fromHeight(48),
                     ),
-                    child: Text(
-                      _paying ? 'Đang mở thanh toán…' : '⚡ Thanh toán VNPay',
-                    ),
+                    child: const Text('⚡ Nâng cấp Premium'),
                   ),
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'So sánh tính năng',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          const SizedBox(height: 8),
-          ..._features.map(
-            (f) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
+          SacoSectionCard(
+            title: 'So sánh tính năng',
+            subtitle: 'Vuốt ngang nếu bảng bị khuất trên màn hình nhỏ',
+            child: SacoHorizontalScroll(
+              minWidth: 480,
+              child: Table(
+                columnWidths: const {
+                  0: FixedColumnWidth(200),
+                  1: FixedColumnWidth(130),
+                  2: FixedColumnWidth(130),
+                },
+                border: TableBorder(
+                  horizontalInside: BorderSide(color: Colors.grey.shade200),
+                ),
                 children: [
-                  Expanded(
-                    flex: 2,
-                    child: Text(f.$1, style: const TextStyle(fontWeight: FontWeight.w500)),
+                  TableRow(
+                    decoration: BoxDecoration(color: Colors.grey.shade50),
+                    children: const [
+                      Padding(
+                        padding: EdgeInsets.all(10),
+                        child: Text('Tính năng', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.all(10),
+                        child: Text('FREEMIUM', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.all(10),
+                        child: Text('PREMIUM', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ],
                   ),
-                  Expanded(child: Text(f.$2, textAlign: TextAlign.center)),
-                  Expanded(
-                    child: Text(
-                      f.$3,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: SacoColors.sacoOrange),
+                  ..._features.map(
+                    (f) => TableRow(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Text(f.$1, style: const TextStyle(fontWeight: FontWeight.w500)),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Text(f.$2, textAlign: TextAlign.center),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Text(
+                            f.$3,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: SacoColors.sacoOrange, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );

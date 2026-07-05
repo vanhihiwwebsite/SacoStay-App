@@ -69,7 +69,14 @@ class _RoomDetailScreenState extends ConsumerState<RoomDetailScreen> {
               Row(
                 children: [
                   IconButton(
-                    onPressed: () => context.go('/rooms'),
+                    onPressed: () {
+                      final from = GoRouterState.of(context).uri.queryParameters['from'];
+                      if (from == 'my-listings') {
+                        context.go('/my-listings');
+                      } else {
+                        context.go('/rooms');
+                      }
+                    },
                     icon: const Icon(Icons.arrow_back),
                   ),
                   Expanded(

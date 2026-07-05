@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'core/notifications/push_notification_service.dart';
 import 'core/storage/user_prefs.dart';
 import 'features/auth/auth_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await PushNotificationService.instance.initialize();
 
   final userPrefs = await UserPrefs.create();
   final container = ProviderContainer(

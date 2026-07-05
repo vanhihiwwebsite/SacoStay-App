@@ -84,10 +84,22 @@ String resolveUserRole(Map<String, dynamic>? user, {String? pendingRole}) {
 
 String? profileAvatarFromRaw(Map<String, dynamic>? user) {
   if (user == null) return null;
-  final direct = strField(
-    pickField(user, 'avatar', ['Avatar', 'AvatarUrl', 'avatarUrl']),
-  );
-  if (direct.isNotEmpty) return direct;
+  final raw = pickField(user, 'avatar', ['Avatar', 'AvatarUrl', 'avatarUrl']);
+  if (raw is List) {
+    for (final item in raw) {
+      final url = item is String
+          ? strField(item)
+          : item is Map
+              ? strField(pickField(Map<String, dynamic>.from(item), 'url', ['Url']))
+              : '';
+      if (url.isNotEmpty && !url.startsWith('[')) return url;
+    }
+  } else {
+    final direct = strField(raw);
+    if (direct.isNotEmpty && direct.startsWith('http') && !direct.startsWith('[')) {
+      return direct;
+    }
+  }
 
   final all = profileImagesListFromRaw(user);
   for (final url in all) {

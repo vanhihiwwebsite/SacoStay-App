@@ -15,6 +15,8 @@ class Environment {
   /// `false` = local dev API; `true` = production (default for emulator without local BE).
   static bool useProduction = true;
 
+  static String get environmentName => useProduction ? 'production' : 'development';
+
   static String get apiUrl {
     if (useProduction) return productionApiUrl;
     if (!kIsWeb && Platform.isAndroid) {

@@ -10,6 +10,7 @@ import '../../core/utils/user_display.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../repositories/notification_repository.dart';
 import 'saco_logo.dart';
+import 'saco_notification_popup.dart';
 
 class NavLinkItem {
   const NavLinkItem({
@@ -66,6 +67,12 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
       roles: ['tenant'],
       iconAsset: BrandAssets.iconPricing,
     ),
+    NavLinkItem(
+      name: 'Tin của tôi',
+      path: '/my-listings',
+      roles: ['landlord'],
+      iconAsset: BrandAssets.iconRooms,
+    ),
     NavLinkItem(name: 'Quản trị', path: '/admin', roles: ['admin']),
   ];
 
@@ -118,18 +125,18 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
                       _AuthActions(
                         isLoggedIn: isLoggedIn,
                         user: user,
-                        onProfile: () => context.go('/profile/me'),
+                        role: role,
+                        onProfile: () {
+                          if (role == 'landlord') {
+                            context.go('/landlord-profile');
+                          } else {
+                            context.go('/profile/me');
+                          }
+                        },
                         onLogout: () =>
                             ref.read(authControllerProvider.notifier).logout(),
                       ),
                     ] else ...[
-                      if (showPostBtn) ...[
-                        _PostListingButton(
-                          compact: true,
-                          onPressed: () => _onPostListing(context, isLoggedIn),
-                        ),
-                        const SizedBox(width: 4),
-                      ],
                       IconButton(
                         onPressed: () => setState(() => _menuOpen = !_menuOpen),
                         icon: Icon(
@@ -147,6 +154,7 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
                   currentPath: currentPath,
                   isLoggedIn: isLoggedIn,
                   user: user,
+                  role: role,
                   showPostListing: showPostBtn,
                   onNavLink: (link) {
                     setState(() => _menuOpen = false);
@@ -189,7 +197,7 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
       );
       return;
     }
-    context.go('/landlord-profile');
+    context.go('/create-listing');
   }
 
   void _navigateLink(BuildContext context, NavLinkItem link, bool isLoggedIn) {
@@ -307,14 +315,26 @@ class _AuthActions extends ConsumerWidget {
   const _AuthActions({
     required this.isLoggedIn,
     required this.user,
+    required this.role,
     required this.onProfile,
     required this.onLogout,
   });
 
   final bool isLoggedIn;
   final Map<String, dynamic>? user;
+  final String role;
   final VoidCallback onProfile;
   final VoidCallback onLogout;
+
+  void _openNotifications(BuildContext context, WidgetRef ref) {
+    final box = context.findRenderObject() as RenderBox?;
+    final offset = box?.localToGlobal(Offset.zero);
+    showSacoNotificationPopup(
+      context,
+      ref,
+      anchorOffset: offset != null ? Offset(offset.dx, offset.dy + box!.size.height) : null,
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -343,7 +363,7 @@ class _AuthActions extends ConsumerWidget {
     return Row(
       children: [
         IconButton(
-          onPressed: () {},
+          onPressed: () => _openNotifications(context, ref),
           tooltip: 'Thông báo',
           icon: Badge(
             isLabelVisible: unread > 0,
@@ -396,6 +416,7 @@ class _MobileMenu extends ConsumerWidget {
     required this.currentPath,
     required this.isLoggedIn,
     required this.user,
+    required this.role,
     required this.showPostListing,
     required this.onNavigate,
     required this.onNavLink,
@@ -407,11 +428,18 @@ class _MobileMenu extends ConsumerWidget {
   final String currentPath;
   final bool isLoggedIn;
   final Map<String, dynamic>? user;
+  final String role;
   final bool showPostListing;
   final void Function(String path) onNavigate;
   final void Function(NavLinkItem link) onNavLink;
   final VoidCallback onPostListing;
   final VoidCallback onLogout;
+
+  void _openNotifications(BuildContext context, WidgetRef ref) {
+    showSacoNotificationPopup(context, ref);
+  }
+
+  String get _profilePath => role == 'landlord' ? '/landlord-profile' : '/profile/me';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -457,8 +485,14 @@ class _MobileMenu extends ConsumerWidget {
             );
           }),
           if (showPostListing) ...[
-            const SizedBox(height: 8),
-            _PostListingButton(compact: false, onPressed: onPostListing),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: SizedBox(
+                width: double.infinity,
+                child: _PostListingButton(compact: false, onPressed: onPostListing),
+              ),
+            ),
           ],
           const SizedBox(height: 12),
           Divider(color: Colors.orange.shade100),
@@ -467,7 +501,7 @@ class _MobileMenu extends ConsumerWidget {
             Material(
               color: Colors.white,
               child: InkWell(
-                onTap: () => onNavigate('/profile/me'),
+                onTap: () => onNavigate(_profilePath),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   child: Row(
@@ -475,7 +509,10 @@ class _MobileMenu extends ConsumerWidget {
                       Badge(
                         isLabelVisible: unread > 0,
                         label: Text('$unread'),
-                        child: const Icon(Icons.notifications_outlined, size: 22),
+                        child: IconButton(
+                          icon: const Icon(Icons.notifications_outlined, size: 22),
+                          onPressed: () => _openNotifications(context, ref),
+                        ),
                       ),
                       const SizedBox(width: 10),
                       CircleAvatar(

@@ -1,25 +1,64 @@
 import 'package:signalr_netcore/signalr_client.dart';
 
 import '../../config/environment.dart';
+import '../storage/token_storage.dart';
 
 class ChatHubService {
   HubConnection? _connection;
+  TokenStorage? _tokenStorage;
+  void Function(String senderId, String text)? _messageHandler;
+  String? lastError;
 
-  Future<void> connect(String token) async {
+  Future<void> connect(TokenStorage tokenStorage) async {
+    _tokenStorage = tokenStorage;
     if (_connection?.state == HubConnectionState.Connected) return;
+
+    await _connection?.stop();
+    _connection = null;
+    lastError = null;
 
     final hub = HubConnectionBuilder()
         .withUrl(
           Environment.chatHubUrl,
           options: HttpConnectionOptions(
-            accessTokenFactory: () async => token,
+            accessTokenFactory: () async {
+              final t = await tokenStorage.read();
+              return t ?? '';
+            },
+            requestTimeout: 30000,
           ),
         )
         .withAutomaticReconnect()
         .build();
 
+    hub.on('ReceiveMessage', (arguments) {
+      if (arguments == null || arguments.length < 2) return;
+      _messageHandler?.call(
+        arguments[0]?.toString() ?? '',
+        arguments[1]?.toString() ?? '',
+      );
+    });
+
     _connection = hub;
-    await hub.start();
+    try {
+      await hub.start();
+      lastError = null;
+    } catch (e) {
+      lastError = e.toString();
+      rethrow;
+    }
+  }
+
+  Future<void> reconnect() async {
+    final storage = _tokenStorage;
+    if (storage == null) {
+      throw Exception('Chưa cấu hình token cho chat hub');
+    }
+    await disconnect();
+    await connect(storage);
+    if (_messageHandler != null) {
+      onIncomingMessage(_messageHandler!);
+    }
   }
 
   Future<void> disconnect() async {
@@ -33,17 +72,23 @@ class ChatHubService {
   bool get isConnected => _connection?.state == HubConnectionState.Connected;
 
   void onIncomingMessage(void Function(String senderId, String text) handler) {
-    _connection?.on('ReceivePrivateMessage', (arguments) {
-      if (arguments == null || arguments.length < 2) return;
-      handler(arguments[0]?.toString() ?? '', arguments[1]?.toString() ?? '');
-    });
+    _messageHandler = handler;
   }
 
   Future<void> sendPrivateMessage(String receiverId, String message) async {
-    final conn = _connection;
+    var conn = _connection;
     if (conn == null || conn.state != HubConnectionState.Connected) {
-      throw Exception('Chưa kết nối máy chủ chat');
+      await reconnect();
+      conn = _connection;
     }
-    await conn.invoke('SendPrivateMessage', args: [receiverId, message]);
+    if (conn == null || conn.state != HubConnectionState.Connected) {
+      throw Exception(lastError ?? 'Chưa kết nối máy chủ chat');
+    }
+    try {
+      await conn.invoke('SendPrivateMessage', args: [receiverId, message]);
+    } catch (e) {
+      lastError = e.toString();
+      rethrow;
+    }
   }
 }

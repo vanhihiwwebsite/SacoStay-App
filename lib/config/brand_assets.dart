@@ -3,6 +3,7 @@ class BrandAssets {
   BrandAssets._();
 
   static const logoDark = 'image/logoSacoStay đen.png';
+  static const logoWhite = 'image/ảnh web logo SacoStay trắng.png';
   static const heroBackground = 'image/Background_Image_2.png';
 
   static const iconDiscovery = 'image/Icon/Discovery.png';

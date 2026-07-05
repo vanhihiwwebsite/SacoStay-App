@@ -13,7 +13,44 @@ bool hasRoomFromAnswers(List<UserLifestyleAnswer> answers) {
 }
 
 String roomStatusLabel(bool hasRoom) =>
-    hasRoom ? 'Đã có phòng' : 'Chưa có phòng';
+    hasRoom ? 'Đã có phòng trọ' : 'Chưa có phòng trọ';
+
+bool isRoomStatusQuestion(String questionContent) {
+  final c = questionContent.toLowerCase();
+  if (c.contains('tình trạng phòng')) return true;
+  if (c.contains('phòng trọ') || c.contains('phòng ở')) return true;
+  return c.contains('phòng') && (c.contains('trọ') || c.contains('thuê'));
+}
+
+bool isRoomPriceQuestion(String questionContent) {
+  final c = questionContent.toLowerCase();
+  if (c.contains('tiền trọ') || c.contains('tiền phòng')) return true;
+  return (c.contains('giá') || c.contains('ngân sách')) &&
+      (c.contains('phòng') || c.contains('trọ'));
+}
+
+List<UserLifestyleAnswer> lifestyleAnswersForDisplay(List<UserLifestyleAnswer> answers) {
+  return answers
+      .where((a) =>
+          !isRoomStatusQuestion(a.questionContent) &&
+          !isRoomPriceQuestion(a.questionContent))
+      .toList();
+}
+
+String lifestyleCategoryLabel(String questionContent) {
+  final c = questionContent.toLowerCase();
+  if (c.contains('giờ') || c.contains('ngủ')) return 'Giờ giấc';
+  if (c.contains('vệ sinh') || c.contains('dọn')) return 'Vệ sinh';
+  if (c.contains('ồn') || c.contains('tiếng')) return 'Tiếng ồn';
+  if (c.contains('thú') || c.contains('pet')) return 'Thú cưng';
+  if (c.contains('khách') || c.contains('party')) return 'Khách';
+  if (c.contains('hút') || c.contains('thuốc')) return 'Hút thuốc';
+  if (c.contains('nấu') || c.contains('bếp')) return 'Nấu ăn';
+  if (questionContent.length > 36) {
+    return '${questionContent.substring(0, 34).trim()}…';
+  }
+  return questionContent;
+}
 
 String tenantRoomPriceLabel(int? price) {
   if (price == null || price <= 0) return '';

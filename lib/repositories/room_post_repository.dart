@@ -6,6 +6,7 @@ import '../core/utils/json_normalize.dart';
 import '../core/utils/media_url.dart';
 import '../core/utils/vip_tier.dart';
 import '../features/auth/auth_provider.dart';
+import '../models/listing_analytics.dart';
 import '../models/room_post.dart';
 
 final roomPostRepositoryProvider = Provider<RoomPostRepository>((ref) {
@@ -112,6 +113,157 @@ class RoomPostRepository {
     try {
       await _dio.post('/RoomPost/${Uri.encodeComponent(postId)}/view');
     } catch (_) {}
+  }
+
+  Future<List<RoomPostSummary>> getMyPosts() async {
+    final raw = await _fetchMyPostsRaw();
+    return _normalizePosts(raw);
+  }
+
+  Future<String> createListing({
+    required String title,
+    required String detailedAddress,
+    required String district,
+    required String city,
+    required double latitude,
+    required double longitude,
+    required int price,
+    required double area,
+    required int maxOccupants,
+    required String description,
+    required List<String> amenities,
+    required List<String> imagePaths,
+  }) async {
+    final files = <MultipartFile>[];
+    for (var i = 0; i < imagePaths.length; i++) {
+      files.add(
+        await MultipartFile.fromFile(
+          imagePaths[i],
+          filename: 'room_$i.jpg',
+        ),
+      );
+    }
+
+    final fd = FormData.fromMap({
+      'Title': title,
+      'DetailedAddress': detailedAddress,
+      'District': district,
+      'City': city,
+      'Latitude': latitude,
+      'Longitude': longitude,
+      'Price': price,
+      'Area': area,
+      'MaxOccupants': maxOccupants,
+      'Description': description,
+      'Amenities': amenities.join(','),
+      if (files.isNotEmpty) 'ImageFiles': files,
+    });
+
+    final response = await _dio.post<dynamic>('/RoomPost/create', data: fd);
+    return _extractCreatedId(response.data);
+  }
+
+  Future<void> updateStatus(
+    String postId,
+    String status, {
+    int? currentPeople,
+  }) async {
+    await _dio.put(
+      '/RoomPost/${Uri.encodeComponent(postId)}/status',
+      data: {
+        'status': status,
+        'Status': status,
+        if (currentPeople != null) 'currentPeople': currentPeople,
+        if (currentPeople != null) 'CurrentPeople': currentPeople,
+      },
+    );
+  }
+
+  Future<void> deleteListing(String postId) async {
+    await _dio.delete('/RoomPost/${Uri.encodeComponent(postId)}');
+  }
+
+  Future<RoomPostViewAnalytics> getRoomViewAnalytics(String postId) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        '/RoomPost/${Uri.encodeComponent(postId)}/analytics',
+      );
+      return _normalizeViewAnalytics(postId, response.data);
+    } catch (_) {
+      return RoomPostViewAnalytics(postId: postId);
+    }
+  }
+
+  /// @deprecated Use [getRoomViewAnalytics]
+  Future<RoomPostViewAnalytics> getAnalytics(String postId) =>
+      getRoomViewAnalytics(postId);
+
+  RoomPostViewAnalytics _normalizeViewAnalytics(String postId, dynamic raw) {
+    final o = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    final id = strField(
+      pickField(o, 'roomId', ['RoomId', 'postId', 'PostId']),
+    ).isNotEmpty
+        ? strField(pickField(o, 'roomId', ['RoomId', 'postId', 'PostId']))
+        : postId;
+    final roomTitle = strField(
+      pickField(o, 'roomTitle', ['RoomTitle', 'title', 'Title']),
+    );
+    final currentPackage = normalizeLandlordPackageCode(
+      pickField(o, 'currentPackage', ['CurrentPackage', 'packageTier', 'PackageTier']),
+    );
+    final isLimitedRaw = o['isLimitedView'] ?? o['IsLimitedView'];
+    final isLimitedView = isLimitedRaw is bool
+        ? isLimitedRaw
+        : currentPackage != 'ELITE';
+    final totalViewsIn24H = num.tryParse(
+          strField(pickField(o, 'totalViewsIn24H', ['TotalViewsIn24H'])),
+        )?.round() ??
+        0;
+
+    final viewersRaw = pickField(o, 'viewers', ['Viewers']);
+    final viewers = <ListingViewerRow>[];
+    if (viewersRaw is List) {
+      for (final item in viewersRaw) {
+        if (item is! Map) continue;
+        final u = Map<String, dynamic>.from(item);
+        final tenantId = strField(
+          pickField(u, 'tenantId', ['TenantId', 'userId', 'UserId']),
+        );
+        if (tenantId.isEmpty) continue;
+        final viewedAt = strField(
+          pickField(u, 'viewedTime', ['ViewedTime', 'viewedAt', 'ViewedAt']),
+        );
+        viewers.add(
+          ListingViewerRow(
+            tenantId: tenantId,
+            viewedAt: viewedAt.isNotEmpty ? viewedAt : DateTime.now().toUtc().toIso8601String(),
+            roomPostId: id,
+            roomTitle: roomTitle,
+          ),
+        );
+      }
+    }
+
+    return RoomPostViewAnalytics(
+      postId: id,
+      roomTitle: roomTitle,
+      currentPackage: currentPackage,
+      isLimitedView: isLimitedView,
+      totalViewsIn24H: totalViewsIn24H > 0 ? totalViewsIn24H : viewers.length,
+      viewers: viewers,
+    );
+  }
+
+  String _extractCreatedId(dynamic raw) {
+    if (raw is Map) {
+      final o = Map<String, dynamic>.from(raw);
+      final nested = o['data'] is Map ? Map<String, dynamic>.from(o['data'] as Map) : o;
+      final id = strField(
+        pickField(nested, 'id', ['Id', 'roomPostId', 'RoomPostId']),
+      );
+      if (id.isNotEmpty) return id;
+    }
+    return '';
   }
 
   Future<List<Map<String, dynamic>>> _fetchRawNearby(

@@ -8,15 +8,18 @@ class SacoLogo extends StatelessWidget {
     super.key,
     this.height = 40,
     this.onTap,
+    this.light = false,
   });
 
   final double height;
   final VoidCallback? onTap;
+  /// White logo/text for dark backgrounds (landlord header, drawer).
+  final bool light;
 
   @override
   Widget build(BuildContext context) {
     final image = Image.asset(
-      BrandAssets.logoDark,
+      light ? BrandAssets.logoWhite : BrandAssets.logoDark,
       height: height,
       fit: BoxFit.contain,
       errorBuilder: (_, __, ___) => Text(
@@ -24,7 +27,7 @@ class SacoLogo extends StatelessWidget {
         style: TextStyle(
           fontWeight: FontWeight.w800,
           fontSize: height * 0.55,
-          color: SacoColors.sacoBlue,
+          color: light ? Colors.white : SacoColors.sacoBlue,
         ),
       ),
     );

@@ -58,13 +58,18 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         if (mounted) context.go('/profile-setup');
         return;
       }
-      final answers = await ref.read(lifestyleRepositoryProvider).getMyAnswers();
-      final hasRoom = hasRoomFromAnswers(answers);
+      final isLandlord = ref.read(authControllerProvider).userRole == 'landlord';
+      List<UserLifestyleAnswer> answers = [];
       TenantRoomProfile? room;
-      if (hasRoom) {
-        final uid = userIdFromUser(user);
-        if (uid != null) {
-          room = await ref.read(tenantRoomRepositoryProvider).getByUserId(uid);
+      var hasRoom = false;
+      if (!isLandlord) {
+        answers = await ref.read(lifestyleRepositoryProvider).getMyAnswers();
+        hasRoom = hasRoomFromAnswers(answers);
+        if (hasRoom) {
+          final uid = userIdFromUser(user);
+          if (uid != null) {
+            room = await ref.read(tenantRoomRepositoryProvider).getByUserId(uid);
+          }
         }
       }
       setState(() {
@@ -148,6 +153,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       );
     }
 
+    final isLandlord = _isOwn
+        ? auth.userRole == 'landlord'
+        : isLandlordUser(_user);
+
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -179,16 +188,18 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                 label: const Text('Quay lại danh sách'),
               ),
             ),
-          _profileCard(context),
+          _profileCard(context, isLandlord: isLandlord),
           const SizedBox(height: 16),
           _introCard(),
-          if (!_isOwn && _compatibility > 0) ...[
+          if (!_isOwn && _compatibility > 0 && !isLandlord) ...[
             const SizedBox(height: 16),
             _compatibilityCard(),
           ],
-          const SizedBox(height: 16),
-          _lifestyleCard(),
-          if (_hasRoom) ...[
+          if (!isLandlord) ...[
+            const SizedBox(height: 16),
+            _lifestyleCard(),
+          ],
+          if (_hasRoom && !isLandlord) ...[
             const SizedBox(height: 16),
             _roomCard(),
           ],
@@ -197,7 +208,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     );
   }
 
-  Widget _profileCard(BuildContext context) {
+  Widget _profileCard(BuildContext context, {required bool isLandlord}) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -253,22 +264,32 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               icon: const Icon(Icons.edit_outlined, size: 18),
               label: const Text('Thay đổi hồ sơ'),
             ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => context.go('/lifestyle-quiz?retake=1&returnUrl=/profile/me'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: SacoColors.sacoOrange,
-                side: const BorderSide(color: SacoColors.sacoOrange),
+            if (!isLandlord) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => context.go('/lifestyle-quiz?retake=1&returnUrl=/profile/me'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: SacoColors.sacoOrange,
+                  side: const BorderSide(color: SacoColors.sacoOrange),
+                ),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Thay đổi lối sống'),
               ),
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Thay đổi lối sống'),
-            ),
+            ],
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => context.go('/profile-setup'),
               icon: const Icon(Icons.photo_library_outlined, size: 18),
               label: const Text('Đăng ảnh cá nhân'),
             ),
+            if (isLandlord) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => context.go('/landlord-profile'),
+                icon: const Icon(Icons.home_work_outlined, size: 18),
+                label: const Text('Quản lý chủ trọ'),
+              ),
+            ],
           ] else ...[
             Row(
               children: [
