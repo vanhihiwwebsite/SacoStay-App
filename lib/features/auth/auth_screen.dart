@@ -362,7 +362,21 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                   queryParameters: GoRouterState.of(context).uri.queryParameters,
                                 ).toString(),
                               ),
-                              child: const Text('Chưa có tài khoản? Đăng ký ngay'),
+                              child: RichText(
+                                text: TextSpan(
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontSize: 14,
+                                  ),
+                                  children: const [
+                                    TextSpan(text: 'Chưa có tài khoản? '),
+                                    TextSpan(
+                                      text: 'Đăng ký ngay',
+                                      style: TextStyle(fontWeight: FontWeight.w800),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ] else ...[
@@ -488,7 +502,21 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                       GoRouterState.of(context).uri.queryParameters,
                                 ).toString(),
                               ),
-                              child: const Text('Đã có tài khoản? Đăng nhập ngay'),
+                              child: RichText(
+                                text: TextSpan(
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontSize: 14,
+                                  ),
+                                  children: const [
+                                    TextSpan(text: 'Đã có tài khoản? '),
+                                    TextSpan(
+                                      text: 'Đăng nhập ngay',
+                                      style: TextStyle(fontWeight: FontWeight.w800),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ],

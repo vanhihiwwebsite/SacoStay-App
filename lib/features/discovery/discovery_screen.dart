@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/theme.dart';
+import '../../core/api/api_exception.dart';
 import '../../core/utils/discovery_filters.dart';
 import '../../core/utils/lifestyle_display.dart';
 import '../../core/utils/media_url.dart';
@@ -81,6 +82,14 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         _needsQuiz = false;
         _loading = false;
       });
+    } on ApiException catch (e) {
+      setState(() {
+        _loading = false;
+        _deckEmpty = true;
+      });
+      if (e.statusCode == 403 && mounted) {
+        context.go('/identity-verification?returnUrl=/discovery');
+      }
     } catch (_) {
       setState(() {
         _loading = false;
@@ -105,6 +114,48 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
       _showFilters = false;
       _photoIndex = 0;
     });
+  }
+
+  void _focusWishlistCard(String userId) {
+    var idx = _deck.indexWhere((c) => c.userId == userId);
+    if (idx == -1) {
+      DiscoveryCard? card;
+      for (final c in _allCards) {
+        if (c.userId == userId) {
+          card = c;
+          break;
+        }
+      }
+      if (card == null) return;
+      setState(() {
+        _deck = [
+          ..._deck.take(_currentIndex),
+          card!,
+          ..._deck.skip(_currentIndex),
+        ];
+        idx = _currentIndex;
+        _swipeAnimating = false;
+        _dragX = 0;
+        _currentIndex = idx;
+        _photoIndex = 0;
+        _showWishlist = false;
+        _deckEmpty = false;
+      });
+      return;
+    }
+    setState(() {
+      _swipeAnimating = false;
+      _dragX = 0;
+      _currentIndex = idx;
+      _photoIndex = 0;
+      _showWishlist = false;
+    });
+  }
+
+  Color _scoreColor(int score) {
+    if (score >= 80) return const Color(0xFF2ECC71);
+    if (score >= 60) return const Color(0xFFF1C40F);
+    return const Color(0xFFE74C3C);
   }
 
   DiscoveryCard? get _current => _deck.isNotEmpty && _currentIndex < _deck.length
@@ -557,7 +608,10 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         if (_showWishlist)
           _WishlistSheet(
             items: _wishlist,
+            activeUserId: _current?.userId,
+            scoreColor: _scoreColor,
             onClose: () => setState(() => _showWishlist = false),
+            onSelect: _focusWishlistCard,
             onRemove: (id) async {
               await ref.read(lifestyleRepositoryProvider).removeLike(id);
               final list = await ref.read(lifestyleRepositoryProvider).getMyLikes();
@@ -904,12 +958,18 @@ class _TenantRoomPopup extends StatelessWidget {
 class _WishlistSheet extends StatelessWidget {
   const _WishlistSheet({
     required this.items,
+    required this.activeUserId,
+    required this.scoreColor,
     required this.onClose,
+    required this.onSelect,
     required this.onRemove,
   });
 
   final List<WishlistItem> items;
+  final String? activeUserId;
+  final Color Function(int score) scoreColor;
   final VoidCallback onClose;
+  final ValueChanged<String> onSelect;
   final ValueChanged<String> onRemove;
 
   @override
@@ -924,12 +984,14 @@ class _WishlistSheet extends StatelessWidget {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
             clipBehavior: Clip.antiAlias,
             child: SizedBox(
-              height: MediaQuery.of(context).size.height * 0.55,
+              height: MediaQuery.of(context).size.height * 0.62,
               child: Column(
                 children: [
                   ListTile(
-                    title: const Text('Danh sách yêu thích',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    title: const Text(
+                      'Danh sách yêu thích',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     subtitle: Text('${items.length} người'),
                     trailing: IconButton(
                       onPressed: onClose,
@@ -939,21 +1001,39 @@ class _WishlistSheet extends StatelessWidget {
                   const Divider(height: 1),
                   Expanded(
                     child: items.isEmpty
-                        ? const Center(child: Text('Chưa có ai trong danh sách'))
-                        : ListView.builder(
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Text(
+                                'Hãy thả tim để thêm vào danh sách yêu thích!',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ),
+                          )
+                        : GridView.builder(
+                            padding: const EdgeInsets.all(16),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 3 / 4,
+                            ),
                             itemCount: items.length,
                             itemBuilder: (_, i) {
                               final u = items[i];
-                              return ListTile(
-                                leading: CircleAvatar(
-                                  backgroundImage: NetworkImage(u.avatarUrl),
-                                ),
-                                title: Text(u.displayName),
-                                subtitle: Text('${u.matchingScore}% hòa hợp'),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete_outline),
-                                  onPressed: () => onRemove(u.userId),
-                                ),
+                              final active = activeUserId == u.userId;
+                              final avatar = u.avatarUrl.isNotEmpty
+                                  ? u.avatarUrl
+                                  : avatarFallbackUrl(u.displayName);
+                              return _WishlistCard(
+                                item: u,
+                                avatarUrl: avatar,
+                                active: active,
+                                scoreColor: scoreColor(u.matchingScore),
+                                onTap: () => onSelect(u.userId),
+                                onRemove: () => onRemove(u.userId),
                               );
                             },
                           ),
@@ -963,6 +1043,132 @@ class _WishlistSheet extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _WishlistCard extends StatelessWidget {
+  const _WishlistCard({
+    required this.item,
+    required this.avatarUrl,
+    required this.active,
+    required this.scoreColor,
+    required this.onTap,
+    required this.onRemove,
+  });
+
+  final WishlistItem item;
+  final String avatarUrl;
+  final bool active;
+  final Color scoreColor;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              avatarUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => ColoredBox(
+                color: SacoColors.sacoOrange,
+                child: Center(
+                  child: Text(
+                    item.displayName.isNotEmpty
+                        ? item.displayName.characters.first.toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (active)
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: SacoColors.sacoOrange, width: 3),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: scoreColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${item.matchingScore}%',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Material(
+                color: Colors.black54,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: onRemove,
+                  child: const SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: Icon(Icons.close, size: 16, color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Colors.black87, Colors.transparent],
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 24, 10, 8),
+                  child: Text(
+                    item.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

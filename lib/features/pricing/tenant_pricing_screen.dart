@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/theme.dart';
 import '../../features/auth/auth_provider.dart';
-import '../../features/payment/payment_config.dart';
+import '../payment/payment_launcher.dart';
 import '../../shared/widgets/saco_landlord_ui.dart';
 import '../../repositories/lifestyle_repository.dart';
 
@@ -18,6 +18,8 @@ class TenantPricingScreen extends ConsumerStatefulWidget {
 class _TenantPricingScreenState extends ConsumerState<TenantPricingScreen> {
   bool _loading = true;
   bool _isPremium = false;
+  bool _paying = false;
+  String? _payError;
 
   static const _features = [
     ('Lượt matching', '5 lượt/tuần', 'Không giới hạn'),
@@ -53,15 +55,12 @@ class _TenantPricingScreenState extends ConsumerState<TenantPricingScreen> {
       context.go('/login?returnUrl=/tenant-pricing');
       return;
     }
-    context.go(
-      Uri(
-        path: '/payment/checkout',
-        queryParameters: {
-          'package': PaymentCheckoutPackage.tenantPremium.label,
-          'context': PaymentContext.tenant.queryValue,
-        },
-      ).toString(),
-    );
+    setState(() {
+      _payError = null;
+      _paying = true;
+    });
+    await launchTenantPremiumPayment(context: context, ref: ref);
+    if (mounted) setState(() => _paying = false);
   }
 
   @override
@@ -99,18 +98,15 @@ class _TenantPricingScreenState extends ConsumerState<TenantPricingScreen> {
             style: TextStyle(color: Colors.grey.shade600),
           ),
           const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(12),
+          if (_payError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                _payError!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+              ),
             ),
-            child: const Text(
-              'Thanh toán đang ở chế độ giao diện demo — backend PayOS tạm bảo trì.',
-              style: TextStyle(fontSize: 13),
-            ),
-          ),
-          const SizedBox(height: 16),
           _planCard(
             title: 'FREEMIUM',
             price: 'Miễn phí',
@@ -153,12 +149,12 @@ class _TenantPricingScreenState extends ConsumerState<TenantPricingScreen> {
                   )
                 else
                   FilledButton(
-                    onPressed: _upgrade,
+                    onPressed: _paying ? null : _upgrade,
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFFFFBD59),
                       minimumSize: const Size.fromHeight(48),
                     ),
-                    child: const Text('⚡ Nâng cấp Premium'),
+                    child: Text(_paying ? 'Đang tạo link…' : '⚡ Nâng cấp Premium'),
                   ),
               ],
             ),

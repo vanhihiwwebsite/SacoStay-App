@@ -5,26 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../../config/brand_assets.dart';
 import '../../config/theme.dart';
 import '../../core/utils/auth_navigation.dart';
-import '../../core/utils/json_normalize.dart';
 import '../../core/utils/user_display.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../repositories/notification_repository.dart';
 import 'saco_logo.dart';
+import '../providers/mobile_menu_provider.dart';
+import 'saco_inline_mobile_menu.dart';
+import 'saco_mobile_menu.dart';
 import 'saco_notification_popup.dart';
-
-class NavLinkItem {
-  const NavLinkItem({
-    required this.name,
-    required this.path,
-    required this.roles,
-    this.iconAsset,
-  });
-
-  final String name;
-  final String path;
-  final List<String> roles;
-  final String? iconAsset;
-}
 
 class SacoNavbar extends ConsumerStatefulWidget {
   const SacoNavbar({super.key});
@@ -85,6 +73,8 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
     final visibleLinks = _links.where((l) => l.roles.contains(role)).toList();
     final currentPath = GoRouterState.of(context).uri.path;
     final isMobile = MediaQuery.sizeOf(context).width < 640;
+    final isDiscovery = currentPath == '/discovery';
+    final discoveryMenuOpen = ref.watch(discoveryMobileMenuOpenProvider);
     final showPostBtn = _showPostListingBtn(isLoggedIn, role, currentPath);
 
     return Material(
@@ -138,9 +128,19 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
                       ),
                     ] else ...[
                       IconButton(
-                        onPressed: () => setState(() => _menuOpen = !_menuOpen),
+                        onPressed: () {
+                          if (isDiscovery) {
+                            ref
+                                .read(discoveryMobileMenuOpenProvider.notifier)
+                                .update((open) => !open);
+                          } else {
+                            setState(() => _menuOpen = !_menuOpen);
+                          }
+                        },
                         icon: Icon(
-                          _menuOpen ? Icons.close : Icons.menu,
+                          isDiscovery
+                              ? (discoveryMenuOpen ? Icons.close : Icons.menu)
+                              : (_menuOpen ? Icons.close : Icons.menu),
                           color: SacoColors.sacoGray,
                         ),
                       ),
@@ -148,8 +148,8 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
                   ],
                 ),
               ),
-              if (_menuOpen && isMobile)
-                _MobileMenu(
+              if (_menuOpen && isMobile && !isDiscovery)
+                SacoInlineMobileMenu(
                   links: visibleLinks,
                   currentPath: currentPath,
                   isLoggedIn: isLoggedIn,
@@ -206,6 +206,121 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
       return;
     }
     context.go(link.path);
+  }
+}
+
+/// Discovery menu overlay: push-down panel over page content without resizing body.
+class DiscoveryMobileMenuOverlay extends ConsumerWidget {
+  const DiscoveryMobileMenuOverlay({super.key, required this.onClose});
+
+  final VoidCallback onClose;
+
+  static const _links = [
+    NavLinkItem(
+      name: 'Tìm bạn',
+      path: '/discovery',
+      roles: ['tenant'],
+      iconAsset: BrandAssets.iconDiscovery,
+    ),
+    NavLinkItem(
+      name: 'Phòng trọ',
+      path: '/rooms',
+      roles: ['tenant', 'landlord'],
+      iconAsset: BrandAssets.iconRooms,
+    ),
+    NavLinkItem(
+      name: 'Bản đồ',
+      path: '/map',
+      roles: ['tenant', 'landlord'],
+      iconAsset: BrandAssets.iconMap,
+    ),
+    NavLinkItem(
+      name: 'Tin nhắn',
+      path: '/chat',
+      roles: ['tenant'],
+      iconAsset: BrandAssets.iconChat,
+    ),
+    NavLinkItem(
+      name: 'Bảng giá',
+      path: '/tenant-pricing',
+      roles: ['tenant'],
+      iconAsset: BrandAssets.iconPricing,
+    ),
+    NavLinkItem(
+      name: 'Tin của tôi',
+      path: '/my-listings',
+      roles: ['landlord'],
+      iconAsset: BrandAssets.iconRooms,
+    ),
+    NavLinkItem(name: 'Quản trị', path: '/admin', roles: ['admin']),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authControllerProvider);
+    final role = auth.userRole;
+    final isLoggedIn = auth.isLoggedIn;
+    final user = auth.user?.raw;
+    final currentPath = GoRouterState.of(context).uri.path;
+    final visibleLinks = _links.where((l) => l.roles.contains(role)).toList();
+    final showPostBtn = _showPostListingBtn(isLoggedIn, role, currentPath);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SacoInlineMobileMenu(
+          links: visibleLinks,
+          currentPath: currentPath,
+          isLoggedIn: isLoggedIn,
+          user: user,
+          role: role,
+          showPostListing: showPostBtn,
+          onNavLink: (link) {
+            onClose();
+            if (!isLoggedIn && isTenantAuthPath(link.path)) {
+              context.go('/login?returnUrl=${Uri.encodeComponent(link.path)}');
+              return;
+            }
+            context.go(link.path);
+          },
+          onPostListing: () {
+            onClose();
+            if (!isLoggedIn) {
+              context.go(
+                Uri(
+                  path: '/login',
+                  queryParameters: landlordPostListingQueryParams(),
+                ).toString(),
+              );
+              return;
+            }
+            context.go('/create-listing');
+          },
+          onNavigate: (path) {
+            onClose();
+            context.go(path);
+          },
+          onLogout: () {
+            onClose();
+            ref.read(authControllerProvider.notifier).logout();
+          },
+        ),
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onClose,
+            child: Container(color: Colors.black.withValues(alpha: 0.35)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  bool _showPostListingBtn(bool isLoggedIn, String role, String path) {
+    if (role == 'admin') return false;
+    if (isLoggedIn && role == 'tenant') return false;
+    if (!isLoggedIn) return path == '/';
+    return role == 'landlord';
   }
 }
 
@@ -406,202 +521,6 @@ class _AuthActions extends ConsumerWidget {
           color: SacoColors.sacoGray,
         ),
       ],
-    );
-  }
-}
-
-class _MobileMenu extends ConsumerWidget {
-  const _MobileMenu({
-    required this.links,
-    required this.currentPath,
-    required this.isLoggedIn,
-    required this.user,
-    required this.role,
-    required this.showPostListing,
-    required this.onNavigate,
-    required this.onNavLink,
-    required this.onPostListing,
-    required this.onLogout,
-  });
-
-  final List<NavLinkItem> links;
-  final String currentPath;
-  final bool isLoggedIn;
-  final Map<String, dynamic>? user;
-  final String role;
-  final bool showPostListing;
-  final void Function(String path) onNavigate;
-  final void Function(NavLinkItem link) onNavLink;
-  final VoidCallback onPostListing;
-  final VoidCallback onLogout;
-
-  void _openNotifications(BuildContext context, WidgetRef ref) {
-    showSacoNotificationPopup(context, ref);
-  }
-
-  String get _profilePath => role == 'landlord' ? '/landlord-profile' : '/profile/me';
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final unread = ref.watch(unreadNotificationCountProvider).value ?? 0;
-    final label = navProfileLabel(user);
-    final avatarUrl = resolveUserAvatarUrl(user, displayName: label);
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.orange.shade100)),
-      ),
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ...links.map((link) {
-            final active = currentPath == link.path;
-            return Material(
-              color: active ? SacoColors.pageBackground : Colors.white,
-              child: InkWell(
-                onTap: () => onNavLink(link),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                  child: Row(
-                    children: [
-                      if (link.iconAsset != null)
-                        Image.asset(link.iconAsset!, width: 22, height: 22),
-                      if (link.iconAsset != null) const SizedBox(width: 12),
-                      Text(
-                        link.name,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: active ? SacoColors.sacoOrange : SacoColors.sacoGray,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
-          if (showPostListing) ...[
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: SizedBox(
-                width: double.infinity,
-                child: _PostListingButton(compact: false, onPressed: onPostListing),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          Divider(color: Colors.orange.shade100),
-          const SizedBox(height: 8),
-          if (isLoggedIn)
-            Material(
-              color: Colors.white,
-              child: InkWell(
-                onTap: () => onNavigate(_profilePath),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(
-                    children: [
-                      Badge(
-                        isLabelVisible: unread > 0,
-                        label: Text('$unread'),
-                        child: IconButton(
-                          icon: const Icon(Icons.notifications_outlined, size: 22),
-                          onPressed: () => _openNotifications(context, ref),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      CircleAvatar(
-                        radius: 22,
-                        backgroundImage: NetworkImage(avatarUrl),
-                        backgroundColor: Colors.orange.shade100,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              label,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
-                              ),
-                            ),
-                            Text(
-                              strField(user?['email']),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.logout),
-                        onPressed: onLogout,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            )
-          else
-            Column(
-              children: [
-                _MobileAuthButton(
-                  label: 'Đăng nhập',
-                  iconAsset: BrandAssets.iconLogin,
-                  onTap: () => onNavigate('/login'),
-                ),
-                const SizedBox(height: 10),
-                _MobileAuthButton(
-                  label: 'Đăng ký',
-                  iconAsset: BrandAssets.iconRegister,
-                  onTap: () => onNavigate('/register'),
-                ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MobileAuthButton extends StatelessWidget {
-  const _MobileAuthButton({
-    required this.label,
-    required this.iconAsset,
-    required this.onTap,
-  });
-
-  final String label;
-  final String iconAsset;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: SacoColors.sacoBlue,
-        side: BorderSide(color: Colors.orange.shade100),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Image.asset(iconAsset, width: 16, height: 16),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-        ],
-      ),
     );
   }
 }

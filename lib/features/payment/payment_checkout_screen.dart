@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/theme.dart';
+import '../../core/api/api_exception.dart';
+import '../../core/payment/payment_return.dart';
+import '../../repositories/payment_repository.dart';
 import 'payment_config.dart';
+import 'payment_launcher.dart';
 
-class PaymentCheckoutScreen extends StatefulWidget {
+class PaymentCheckoutScreen extends ConsumerStatefulWidget {
   const PaymentCheckoutScreen({
     super.key,
     required this.package,
@@ -17,62 +22,74 @@ class PaymentCheckoutScreen extends StatefulWidget {
   final String? postId;
 
   @override
-  State<PaymentCheckoutScreen> createState() => _PaymentCheckoutScreenState();
+  ConsumerState<PaymentCheckoutScreen> createState() => _PaymentCheckoutScreenState();
 }
 
-class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
+class _PaymentCheckoutScreenState extends ConsumerState<PaymentCheckoutScreen> {
   bool _processing = false;
+  String? _error;
 
-  Future<void> _simulatePay({required bool success}) async {
-    setState(() => _processing = true);
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-
-    final orderId = 'DEMO-${DateTime.now().millisecondsSinceEpoch}';
-    final status = success ? 'success' : 'failed';
-    final params = <String, String>{
-      'status': status,
-      'context': widget.contextType.queryValue,
-      'orderId': orderId,
-      'package': widget.package.label,
-    };
-    if (widget.postId != null && widget.postId!.isNotEmpty) {
-      params['postId'] = widget.postId!;
+  String get _amountFmt {
+    final n = widget.package.amount;
+    final s = n.toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      final pos = s.length - i;
+      buf.write(s[i]);
+      if (pos > 1 && pos % 3 == 1) buf.write('.');
     }
-    context.go(Uri(path: '/payment/result', queryParameters: params).toString());
+    return '${buf}đ';
+  }
+
+  Future<void> _pay() async {
+    if (_processing) return;
+    setState(() {
+      _processing = true;
+      _error = null;
+    });
+
+    try {
+      final repo = ref.read(paymentRepositoryProvider);
+      final url = widget.contextType == PaymentContext.landlord
+          ? await repo.buyLandlordPackage(
+              roomPostId: widget.postId ?? '',
+              packageName: widget.package.label,
+            )
+          : await repo.buyTenantPremium(packageName: widget.package.label);
+
+      await PaymentContextStorage.save(
+        context: widget.contextType,
+        postId: widget.postId,
+        package: widget.package.label,
+      );
+
+      if (!mounted) return;
+      setState(() => _processing = false);
+      await context.push(
+        '/payment/payos',
+        extra: PayOsLaunchArgs(
+          paymentUrl: url,
+          paymentContext: widget.contextType,
+          package: widget.package.label,
+          postId: widget.postId,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _processing = false;
+        _error = e is ApiException ? e.message : 'Không tạo được link thanh toán.';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final amountFmt =
-        '${widget.package.amount.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}đ';
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.amber.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.amber.shade200),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.amber),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Chế độ demo: không gọi API PayOS. Backend payment đang bảo trì.',
-                    style: TextStyle(fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -104,7 +121,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'PayOS Checkout',
+                  'Thanh toán PayOS',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 8),
@@ -114,7 +131,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  amountFmt,
+                  _amountFmt,
                   style: const TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
@@ -137,28 +154,29 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
           _PayMethodTile(
             icon: Icons.qr_code_2,
             title: 'QR PayOS / Ngân hàng',
-            subtitle: 'Quét mã hoặc chuyển khoản (demo UI)',
+            subtitle: 'Quét mã hoặc chuyển khoản qua PayOS',
             selected: true,
           ),
-          _PayMethodTile(
-            icon: Icons.credit_card,
-            title: 'Thẻ nội địa / quốc tế',
-            subtitle: 'Sẽ kích hoạt khi backend sẵn sàng',
-            selected: false,
-          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.shade100),
+              ),
+              child: Text(_error!, style: TextStyle(color: Colors.red.shade800, fontSize: 13)),
+            ),
+          ],
           const SizedBox(height: 24),
           FilledButton(
-            onPressed: _processing ? null : () => _simulatePay(success: true),
+            onPressed: _processing ? null : _pay,
             style: FilledButton.styleFrom(
               backgroundColor: SacoColors.sacoOrange,
               minimumSize: const Size.fromHeight(50),
             ),
-            child: Text(_processing ? 'Đang xử lý…' : 'Thanh toán $amountFmt'),
-          ),
-          const SizedBox(height: 10),
-          OutlinedButton(
-            onPressed: _processing ? null : () => _simulatePay(success: false),
-            child: const Text('Mô phỏng thanh toán thất bại'),
+            child: Text(_processing ? 'Đang tạo link…' : 'Thanh toán $_amountFmt'),
           ),
           TextButton(
             onPressed: _processing ? null : () => context.pop(),

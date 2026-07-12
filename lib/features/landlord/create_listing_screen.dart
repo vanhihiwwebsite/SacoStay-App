@@ -9,6 +9,8 @@ import 'package:latlong2/latlong.dart';
 
 import '../../config/theme.dart';
 import '../../core/utils/vietnam_districts.dart';
+import '../../core/api/api_exception.dart';
+import '../../core/utils/room_amenities.dart';
 import '../../repositories/room_post_repository.dart';
 import '../../shared/widgets/saco_landlord_ui.dart';
 import 'widgets/map_pin_picker.dart';
@@ -36,10 +38,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   final _imagePaths = <String>[];
   bool _submitting = false;
 
-  static const _amenityOptions = [
-    'Wifi', 'Máy lạnh', 'Giường', 'Tủ lạnh', 'Máy giặt',
-    'Bếp', 'Ban công', 'Thang máy', 'Gửi xe', 'An ninh',
-  ];
+  static const _amenityOptions = landlordAmenityValues;
 
   @override
   void dispose() {
@@ -71,7 +70,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     if (files.isEmpty) return;
     setState(() {
       for (final f in files) {
-        if (_imagePaths.length >= 10) break;
+        if (_imagePaths.length >= 5) break;
         _imagePaths.add(f.path);
       }
     });
@@ -115,8 +114,11 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       context.go(id.isNotEmpty ? '/my-listings' : '/landlord-profile');
     } catch (e) {
       if (mounted) {
+        final msg = e is ApiException
+            ? e.message
+            : 'Lỗi đăng tin. Vui lòng kiểm tra lại thông tin.';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi đăng tin: $e')),
+          SnackBar(content: Text(msg)),
         );
       }
     } finally {
@@ -309,7 +311,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                       ),
                     ),
                     icon: const Icon(Icons.add_photo_alternate_outlined),
-                    label: const Text('Thêm ảnh (tối đa 10)'),
+                    label: const Text('Thêm ảnh (tối đa 5)'),
                   ),
                   if (_imagePaths.isNotEmpty) ...[
                     const SizedBox(height: 12),

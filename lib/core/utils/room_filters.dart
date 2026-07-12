@@ -113,6 +113,15 @@ int activeFilterCount(RoomListFilters filters) {
   return count;
 }
 
+String mapListPrice(int? price) {
+  if (price == null || price <= 0) return 'Liên hệ';
+  final millions = price / 1000000;
+  final rounded = millions == millions.roundToDouble()
+      ? millions.toStringAsFixed(0)
+      : millions.toStringAsFixed(1);
+  return '${rounded}tr/tháng';
+}
+
 String priceShort(int? price) {
   if (price == null || price <= 0) return 'Liên hệ';
   final millions = price / 1000000;
@@ -123,4 +132,14 @@ String priceShort(int? price) {
     return '${rounded}tr';
   }
   return '${(price / 1000).round()}k';
+}
+
+/// Full price label for room cards — matches web `formatPrice`.
+String formatRoomListPrice(int? price) {
+  if (price == null || price <= 0) return 'Liên hệ';
+  final formatted = price.toString().replaceAllMapped(
+        RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+        (m) => '${m[1]}.',
+      );
+  return '$formatted đ/tháng';
 }

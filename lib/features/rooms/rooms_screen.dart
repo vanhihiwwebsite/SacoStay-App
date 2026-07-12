@@ -19,8 +19,12 @@ class RoomsScreen extends ConsumerStatefulWidget {
 }
 
 class _RoomsScreenState extends ConsumerState<RoomsScreen> {
-  final _filters = RoomListFilters();
+  RoomListFilters _filters = RoomListFilters();
   bool _showFilterPanel = false;
+
+  void _updateFilters(RoomListFilters next) {
+    setState(() => _filters = next.copy());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,43 +73,41 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
                           const Text(
                             'Phòng trọ nổi bật',
                             style: TextStyle(
-                              fontSize: 22,
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'Danh sách phòng trọ đã được xác thực',
-                            style: TextStyle(color: Colors.grey.shade600),
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                           ),
                         ],
                       ),
                     ),
-                    OutlinedButton.icon(
-                      onPressed: () => context.go('/map'),
-                      icon: const Icon(Icons.map_outlined, size: 18),
-                      label: const Text('Xem bản đồ'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.grey.shade700,
-                      ),
-                    ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.go('/map'),
+                    icon: const Icon(Icons.map_outlined, size: 18),
+                    label: const Text('Xem bản đồ'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.grey.shade700,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 _filterBar(),
                 if (_showFilterPanel)
                   RoomFiltersPanel(
                     filters: _filters,
-                    onChanged: (f) => setState(() {
-                      _filters.city = f.city;
-                      _filters.district = f.district;
-                      _filters.priceMin = f.priceMin;
-                      _filters.priceMax = f.priceMax;
-                      _filters.maxOccupants = f.maxOccupants;
-                      _filters.amenities
-                        ..clear()
-                        ..addAll(f.amenities);
-                    }),
+                    resultCount: filtered.length,
+                    onChanged: _updateFilters,
                     onClose: () => setState(() => _showFilterPanel = false),
                   ),
                 const SizedBox(height: 8),
@@ -140,7 +142,7 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
                           crossAxisCount: crossAxisCount,
                           crossAxisSpacing: 16,
                           mainAxisSpacing: 16,
-                          childAspectRatio: crossAxisCount == 1 ? 0.92 : 0.78,
+                          childAspectRatio: crossAxisCount == 1 ? 0.82 : 0.72,
                         ),
                         itemCount: filtered.length,
                         itemBuilder: (_, i) => RoomCard(
@@ -165,40 +167,57 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
       spacing: 8,
       runSpacing: 8,
       children: [
-        FilterChip(
-          label: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.tune, size: 16),
-              const SizedBox(width: 6),
-              const Text('Bộ lọc'),
-              if (count > 0) ...[
-                const SizedBox(width: 6),
-                CircleAvatar(
-                  radius: 10,
-                  backgroundColor: _showFilterPanel
-                      ? Colors.white
-                      : SacoColors.sacoOrange,
-                  child: Text(
-                    '$count',
+        Material(
+          color: _showFilterPanel ? SacoColors.sacoOrange : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            onTap: () => setState(() => _showFilterPanel = !_showFilterPanel),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: _showFilterPanel ? SacoColors.sacoOrange : Colors.grey.shade300,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.tune,
+                    size: 16,
+                    color: _showFilterPanel ? Colors.white : Colors.grey.shade700,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Bộ lọc',
                     style: TextStyle(
-                      fontSize: 10,
-                      color: _showFilterPanel
-                          ? SacoColors.sacoOrange
-                          : Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: _showFilterPanel ? Colors.white : Colors.grey.shade700,
                     ),
                   ),
-                ),
-              ],
-            ],
+                  if (count > 0) ...[
+                    const SizedBox(width: 8),
+                    CircleAvatar(
+                      radius: 10,
+                      backgroundColor:
+                          _showFilterPanel ? Colors.white : SacoColors.sacoOrange,
+                      child: Text(
+                        '$count',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: _showFilterPanel ? SacoColors.sacoOrange : Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
-          selected: _showFilterPanel,
-          selectedColor: SacoColors.sacoOrange,
-          showCheckmark: false,
-          labelStyle: TextStyle(
-            color: _showFilterPanel ? Colors.white : Colors.grey.shade800,
-          ),
-          onSelected: (_) => setState(() => _showFilterPanel = !_showFilterPanel),
         ),
         if (_filters.city != 'all')
           _activeChip(_filters.city, () => setState(() => _filters.city = 'all')),

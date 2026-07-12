@@ -6,12 +6,10 @@ import 'package:image_picker/image_picker.dart';
 import '../../config/theme.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/utils/json_normalize.dart';
-import '../../core/utils/kyc_display.dart';
 import '../../core/utils/user_display.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../models/kyc.dart';
 import '../../repositories/kyc_repository.dart';
-import '../../repositories/user_profile_images_repository.dart';
 
 class ProfileSetupScreen extends ConsumerStatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -27,16 +25,17 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _phone = TextEditingController();
   final _livingArea = TextEditingController();
   final _bio = TextEditingController();
-  final _dob = TextEditingController();
 
   String _gender = 'male';
   String _job = 'student';
+  DateTime? _dateOfBirth;
   bool _loading = true;
   bool _submitting = false;
   bool _avatarUploading = false;
+  bool _avatarDeleting = false;
   String? _error;
   KycApiStatus _kycStatus = KycApiStatus.notSubmitted;
-  List<String> _personalPhotos = [];
+  String? _kycAdminNote;
 
   static const _maxBio = 300;
 
@@ -62,16 +61,16 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         _phone.text = strField(pickField(user, 'phoneNumber', ['PhoneNumber']));
         _livingArea.text = profileLivingAreaSeed(user);
         _bio.text = strField(pickField(user, 'bio', ['Bio']));
-        _dob.text = profileDateOfBirthSeed(user);
+        final dobRaw = profileDateOfBirthSeed(user);
+        _dateOfBirth = DateTime.tryParse(dobRaw.length >= 10 ? dobRaw.substring(0, 10) : dobRaw);
         _gender = genderToFormValue(user['gender'] ?? user['Gender']);
         final job = strField(pickField(user, 'job', ['Job', 'occupation']));
         if (job.isNotEmpty) _job = job;
       }
       final kyc = await ref.read(kycRepositoryProvider).getMyStatus();
-      final photos = await ref.read(userProfileImagesRepositoryProvider).getMyImages();
       setState(() {
         _kycStatus = kyc.status;
-        _personalPhotos = photos;
+        _kycAdminNote = kyc.adminNote;
       });
     } catch (_) {}
     setState(() => _loading = false);
@@ -84,7 +83,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _phone.dispose();
     _livingArea.dispose();
     _bio.dispose();
-    _dob.dispose();
     super.dispose();
   }
 
@@ -92,6 +90,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     final user = ref.read(authControllerProvider).user?.raw;
     final label = navProfileLabel(user);
     return resolveUserAvatarUrl(user, displayName: label);
+  }
+
+  bool get _hasServerAvatar => profileAvatarFromRaw(ref.read(authControllerProvider).user?.raw) != null;
+
+  String get _pageTitle {
+    final user = ref.read(authControllerProvider).user?.raw;
+    return hasBasicProfileFilled(user) ? 'Chỉnh sửa hồ sơ' : 'Tạo hồ sơ của bạn';
   }
 
   Future<void> _pickAvatar() async {
@@ -102,39 +107,57 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       await ref.read(authRepositoryProvider).updateProfile(avatarFilePath: file.path);
       await ref.read(authControllerProvider.notifier).refreshProfile();
     } on ApiException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
     } finally {
-      setState(() => _avatarUploading = false);
+      if (mounted) setState(() => _avatarUploading = false);
     }
   }
 
-  Future<void> _addPhotos() async {
-    if (_personalPhotos.length >= UserProfileImagesRepository.maxPhotos) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tối đa 5 ảnh cá nhân.')),
-      );
-      return;
-    }
-    final files = await _picker.pickMultiImage(imageQuality: 85);
-    if (files.isEmpty) return;
+  Future<void> _deleteAvatar() async {
+    final url = profileAvatarFromRaw(ref.read(authControllerProvider).user?.raw);
+    if (url == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xóa ảnh đại diện'),
+        content: const Text('Xóa ảnh đại diện hiện tại?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Xóa')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _avatarDeleting = true);
     try {
-      final paths = files.map((f) => f.path).toList();
-      final uploaded = await ref.read(userProfileImagesRepositoryProvider).upload(paths);
-      setState(() => _personalPhotos = uploaded);
+      await ref.read(authRepositoryProvider).deleteProfileImage(url);
       await ref.read(authControllerProvider.notifier).refreshProfile();
     } on ApiException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _avatarDeleting = false);
     }
   }
 
-  Future<void> _deletePhoto(String url) async {
-    try {
-      await ref.read(userProfileImagesRepositoryProvider).delete(url);
-      setState(() => _personalPhotos = _personalPhotos.where((u) => u != url).toList());
-      await ref.read(authControllerProvider.notifier).refreshProfile();
-    } on ApiException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-    }
+  Future<void> _pickDateOfBirth() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dateOfBirth ?? DateTime(now.year - 20),
+      firstDate: DateTime(now.year - 80),
+      lastDate: now,
+    );
+    if (picked != null) setState(() => _dateOfBirth = picked);
+  }
+
+  String? _dobForApi() {
+    if (_dateOfBirth == null) return null;
+    final d = _dateOfBirth!;
+    return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   }
 
   Future<void> _submit() async {
@@ -154,7 +177,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             job: _job,
             livingArea: _livingArea.text.trim(),
             bio: _bio.text.trim(),
-            dateOfBirth: _dob.text.trim(),
+            dateOfBirth: _dobForApi(),
             gender: _gender,
           );
       await ref.read(authControllerProvider.notifier).refreshProfile();
@@ -165,7 +188,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           backgroundColor: SacoColors.sacoOrange,
         ),
       );
-      context.go('/');
+      context.go('/profile/me');
     } on ApiException catch (e) {
       setState(() {
         _error = e.message;
@@ -195,177 +218,390 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final user = auth.user?.raw;
-    final pageTitle = hasBasicProfileFilled(user)
-        ? 'Chỉnh sửa hồ sơ'
-        : 'Tạo hồ sơ của bạn';
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            pageTitle,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            _pageTitle,
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             'Cập nhật thông tin cá nhân của bạn.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey.shade600),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'eKYC: ${kycStatusLabel(_kycStatus)}',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
-          ),
           const SizedBox(height: 20),
-          Center(
-            child: Stack(
-              children: [
-                CircleAvatar(
-                  radius: 48,
-                  backgroundImage: NetworkImage(_avatarUrl),
+          _kycBanner(),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
-                if (_avatarUploading)
-                  const Positioned.fill(
-                    child: CircularProgressIndicator(),
-                  ),
               ],
             ),
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: TextButton.icon(
-              onPressed: _avatarUploading ? null : _pickAvatar,
-              icon: const Icon(Icons.camera_alt_outlined, size: 18),
-              label: const Text('Đổi ảnh đại diện'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ..._personalPhotos.map(
-                (url) => Stack(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _avatarSection(),
+                const Divider(height: 32),
+                Row(
                   children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(url, width: 72, height: 72, fit: BoxFit.cover),
+                    Expanded(child: _labeledField('Họ', _firstName)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _labeledField('Tên', _lastName)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(child: _dobField()),
+                    const SizedBox(width: 12),
+                    Expanded(child: _genderField()),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _jobField(),
+                const SizedBox(height: 16),
+                _labeledField('Số điện thoại', _phone, keyboard: TextInputType.phone),
+                const SizedBox(height: 16),
+                _labeledField('Khu vực sống', _livingArea, hint: 'VD: Cầu Giấy, Hà Nội'),
+                const SizedBox(height: 16),
+                _bioField(),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+                ],
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    OutlinedButton(
+                      onPressed: () => context.canPop() ? context.pop() : context.go('/profile/me'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      ),
+                      child: const Text('Quay lại'),
                     ),
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: GestureDetector(
-                        onTap: () => _deletePhoto(url),
-                        child: const Icon(Icons.close, size: 18, color: Colors.red),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _submitting ? null : _submit,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: SacoColors.sacoOrange,
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        child: _submitting
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('Lưu hồ sơ'),
                       ),
                     ),
                   ],
                 ),
-              ),
-              if (_personalPhotos.length < UserProfileImagesRepository.maxPhotos)
-                OutlinedButton.icon(
-                  onPressed: _addPhotos,
-                  icon: const Icon(Icons.add_a_photo, size: 18),
-                  label: const Text('Thêm ảnh'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(child: _field('Họ', _firstName)),
-              const SizedBox(width: 12),
-              Expanded(child: _field('Tên', _lastName)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _field('Ngày sinh (yyyy-MM-dd)', _dob),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: _gender,
-            decoration: _decoration('Giới tính'),
-            items: const [
-              DropdownMenuItem(value: 'male', child: Text('Nam')),
-              DropdownMenuItem(value: 'female', child: Text('Nữ')),
-              DropdownMenuItem(value: 'other', child: Text('Khác')),
-            ],
-            onChanged: (v) => setState(() => _gender = v ?? 'male'),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: _job,
-            decoration: _decoration('Nghề nghiệp'),
-            items: const [
-              DropdownMenuItem(value: 'student', child: Text('Sinh viên')),
-              DropdownMenuItem(value: 'fresher', child: Text('Fresher')),
-              DropdownMenuItem(value: 'working', child: Text('Đã đi làm')),
-            ],
-            onChanged: (v) => setState(() => _job = v ?? 'student'),
-          ),
-          const SizedBox(height: 12),
-          _field('Số điện thoại', _phone, keyboard: TextInputType.phone),
-          const SizedBox(height: 12),
-          _field('Khu vực sinh sống', _livingArea),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _bio,
-            maxLines: 4,
-            maxLength: _maxBio,
-            decoration: _decoration('Giới thiệu bản thân'),
-            onChanged: (_) => setState(() {}),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
-          ],
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: _submitting ? null : _submit,
-            style: FilledButton.styleFrom(
-              backgroundColor: SacoColors.sacoOrange,
-              minimumSize: const Size.fromHeight(48),
+              ],
             ),
-            child: _submitting
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Lưu hồ sơ'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: () => context.go('/lifestyle-quiz?returnUrl=/profile-setup'),
-            child: const Text('Thay đổi lối sống (quiz)'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            onPressed: () => context.go('/identity-verification?returnUrl=/profile-setup'),
-            child: const Text('Xác minh danh tính (eKYC)'),
           ),
         ],
       ),
     );
   }
 
-  Widget _field(String label, TextEditingController c, {TextInputType? keyboard}) {
-    return TextField(
-      controller: c,
-      keyboardType: keyboard,
-      decoration: _decoration(label),
+  Widget _kycBanner() {
+    switch (_kycStatus) {
+      case KycApiStatus.approved:
+        return _bannerBox(
+          color: Colors.green.shade50,
+          border: Colors.green.shade200,
+          icon: Icons.verified_user_outlined,
+          iconColor: Colors.green.shade600,
+          title: 'Đã xác thực danh tính',
+          message: 'Bạn có thể sử dụng tất cả các tính năng của hệ thống.',
+        );
+      case KycApiStatus.pending:
+        return _bannerBox(
+          color: Colors.blue.shade50,
+          border: Colors.blue.shade200,
+          icon: Icons.hourglass_top_outlined,
+          iconColor: Colors.blue.shade600,
+          title: 'Đang xử lý xác thực',
+          message: 'Hệ thống AI đang kiểm tra hồ sơ. Vui lòng thử lại sau vài phút.',
+        );
+      case KycApiStatus.rejected:
+      case KycApiStatus.needReupload:
+        return _bannerBox(
+          color: Colors.red.shade50,
+          border: Colors.red.shade200,
+          icon: Icons.error_outline,
+          iconColor: Colors.red.shade600,
+          title: 'Xác thực chưa thành công',
+          message: _kycAdminNote ??
+              'Khuôn mặt không khớp với CCCD hoặc ảnh không hợp lệ. Vui lòng thử lại.',
+          actionLabel: 'Xác thực lại',
+          onAction: () => context.go('/identity-verification?returnUrl=/profile-setup'),
+        );
+      default:
+        return _bannerBox(
+          color: Colors.orange.shade50,
+          border: Colors.orange.shade200,
+          icon: Icons.warning_amber_outlined,
+          iconColor: Colors.orange.shade600,
+          title: 'Chưa xác thực danh tính',
+          message:
+              'Bạn cần xác thực danh tính (CCCD + quét khuôn mặt eKYC) để sử dụng đầy đủ tính năng.',
+          actionLabel: 'Xác thực ngay',
+          onAction: () => context.go('/identity-verification?returnUrl=/profile-setup'),
+        );
+    }
+  }
+
+  Widget _bannerBox({
+    required Color color,
+    required Color border,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String message,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: iconColor, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text(message, style: TextStyle(fontSize: 13, color: Colors.grey.shade800)),
+                if (actionLabel != null && onAction != null) ...[
+                  const SizedBox(height: 10),
+                  FilledButton(
+                    onPressed: onAction,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: iconColor,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    child: Text(actionLabel, style: const TextStyle(fontSize: 13)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  InputDecoration _decoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+  Widget _avatarSection() {
+    final busy = _avatarUploading || _avatarDeleting;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          children: [
+            CircleAvatar(
+              radius: 48,
+              backgroundImage: NetworkImage(_avatarUrl),
+            ),
+            if (busy)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black45,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Ảnh đại diện', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text(
+                'JPG, PNG hoặc WebP — tối đa 5MB',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton(
+                    onPressed: busy ? null : _pickAvatar,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: SacoColors.sacoOrange,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                    child: Text(_hasServerAvatar ? 'Đổi ảnh' : 'Tải ảnh lên'),
+                  ),
+                  if (_hasServerAvatar)
+                    OutlinedButton(
+                      onPressed: busy ? null : _deleteAvatar,
+                      child: const Text('Xóa ảnh'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _labeledField(
+    String label,
+    TextEditingController controller, {
+    TextInputType? keyboard,
+    String? hint,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          keyboardType: keyboard,
+          decoration: InputDecoration(
+            hintText: hint,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _dobField() {
+    final label = _dateOfBirth != null
+        ? '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}'
+        : 'Chọn ngày sinh';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Ngày sinh', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: _pickDateOfBirth,
+          borderRadius: BorderRadius.circular(8),
+          child: InputDecorator(
+            decoration: InputDecoration(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+            ),
+            child: Text(label, style: TextStyle(color: Colors.grey.shade800)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _genderField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Giới tính', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          isExpanded: true,
+          initialValue: _gender,
+          decoration: InputDecoration(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          items: const [
+            DropdownMenuItem(value: 'male', child: Text('Nam')),
+            DropdownMenuItem(value: 'female', child: Text('Nữ')),
+            DropdownMenuItem(value: 'other', child: Text('Khác')),
+          ],
+          onChanged: (v) => setState(() => _gender = v ?? 'male'),
+        ),
+      ],
+    );
+  }
+
+  Widget _jobField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Công việc', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          isExpanded: true,
+          initialValue: _job,
+          decoration: InputDecoration(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          items: const [
+            DropdownMenuItem(value: 'student', child: Text('Sinh viên')),
+            DropdownMenuItem(value: 'fresher', child: Text('Mới đi làm (Fresher)')),
+            DropdownMenuItem(value: 'working', child: Text('Đã đi làm')),
+          ],
+          onChanged: (v) => setState(() => _job = v ?? 'student'),
+        ),
+      ],
+    );
+  }
+
+  Widget _bioField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Giới thiệu', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _bio,
+          maxLines: 4,
+          maxLength: _maxBio,
+          decoration: InputDecoration(
+            hintText: 'Giới thiệu ngắn...',
+            contentPadding: const EdgeInsets.all(12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            counterText: '${_bio.text.length}/$_maxBio',
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+      ],
     );
   }
 }

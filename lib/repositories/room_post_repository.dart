@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/api/api_exception.dart';
 import '../core/utils/geo.dart';
 import '../core/utils/json_normalize.dart';
 import '../core/utils/media_url.dart';
@@ -134,6 +135,10 @@ class RoomPostRepository {
     required List<String> amenities,
     required List<String> imagePaths,
   }) async {
+    if (imagePaths.length > 5) {
+      throw ApiException(message: 'Bạn chỉ được phép tải lên tối đa 5 hình ảnh.');
+    }
+
     final files = <MultipartFile>[];
     for (var i = 0; i < imagePaths.length; i++) {
       files.add(
@@ -144,23 +149,39 @@ class RoomPostRepository {
       );
     }
 
-    final fd = FormData.fromMap({
-      'Title': title,
-      'DetailedAddress': detailedAddress,
-      'District': district,
-      'City': city,
-      'Latitude': latitude,
-      'Longitude': longitude,
-      'Price': price,
-      'Area': area,
-      'MaxOccupants': maxOccupants,
-      'Description': description,
-      'Amenities': amenities.join(','),
-      if (files.isNotEmpty) 'ImageFiles': files,
-    });
+    final fd = FormData();
+    fd.fields.addAll([
+      MapEntry('Title', title),
+      MapEntry('DetailedAddress', detailedAddress),
+      MapEntry('District', district),
+      MapEntry('City', city),
+      MapEntry('Area', area.toString()),
+      MapEntry('MaxPeople', maxOccupants.toString()),
+      MapEntry('Price', price.toString()),
+      MapEntry('Location.Latitude', latitude.toString()),
+      MapEntry('Location.Longitude', longitude.toString()),
+      MapEntry('Description', description),
+    ]);
+    for (final amenity in amenities) {
+      fd.fields.add(MapEntry('Amenities', amenity));
+    }
+    for (final file in files) {
+      fd.files.add(MapEntry('ImageFiles', file));
+    }
 
-    final response = await _dio.post<dynamic>('/RoomPost/create', data: fd);
-    return _extractCreatedId(response.data);
+    try {
+      final response = await _dio.post<dynamic>('/RoomPost/create', data: fd);
+      return _extractCreatedId(response.data);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map) {
+        final msg = strField(
+          pickField(Map<String, dynamic>.from(data), 'message', ['Message']),
+        );
+        if (msg.isNotEmpty) throw ApiException(message: msg);
+      }
+      rethrow;
+    }
   }
 
   Future<void> updateStatus(

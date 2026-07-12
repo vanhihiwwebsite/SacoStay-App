@@ -13,8 +13,10 @@ import '../../core/utils/media_url.dart';
 import '../../core/utils/presence.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../models/chat.dart';
+import '../../models/shared_space.dart';
 import '../../repositories/chat_repository.dart';
 import '../../repositories/presence_repository.dart';
+import '../../repositories/shared_space_repository.dart';
 
 String _formatListTime(String? raw) {
   if (raw == null || raw.isEmpty) return '';
@@ -63,6 +65,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _mobileThreadOpen = false;
   String? _error;
   bool _bootstrapped = false;
+  List<SharedSpaceSummary> _sharedSpaces = [];
+  bool _creatingSharedSpace = false;
 
   Timer? _convTimer;
   Timer? _msgTimer;
@@ -107,6 +111,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     await _connectHub();
     await _loadConversations();
     _startPolling();
+    if (!_isLandlordShell) {
+      await _loadSharedSpaces();
+    }
 
     if (!mounted) return;
     final params = GoRouterState.of(context).uri.queryParameters;
@@ -119,6 +126,72 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         role: params['role'],
       );
       await _selectConversation(withId);
+    }
+  }
+
+  Future<void> _loadSharedSpaces() async {
+    try {
+      final spaces = await ref.read(sharedSpaceRepositoryProvider).listSpaces();
+      if (mounted) setState(() => _sharedSpaces = spaces);
+    } catch (_) {
+      if (mounted) setState(() => _sharedSpaces = []);
+    }
+  }
+
+  List<SharedSpaceSummary> _spacesWithPartner(String partnerId) {
+    return _sharedSpaces.where((s) => _sameUserId(s.partnerId, partnerId)).toList();
+  }
+
+  bool _canShowSharedSpaceAction() {
+    if (_isLandlordShell || _activeUserId == null) return false;
+    final peer = _peers[_activeUserId!];
+    return !(peer?.isLandlord ?? false);
+  }
+
+  bool _hasExistingSharedSpace() {
+    final peerId = _activeUserId;
+    if (peerId == null) return false;
+    return _spacesWithPartner(peerId).isNotEmpty;
+  }
+
+  String? _activeSharedSpaceId() {
+    final peerId = _activeUserId;
+    if (peerId == null) return null;
+    final spaces = _spacesWithPartner(peerId);
+    return spaces.isEmpty ? null : spaces.first.id;
+  }
+
+  Future<void> _onSharedSpaceAction() async {
+    final peerId = _activeUserId;
+    if (peerId == null) return;
+
+    if (_hasExistingSharedSpace()) {
+      final spaceId = _activeSharedSpaceId();
+      if (spaceId != null) {
+        context.go('/shared-space?spaceId=${Uri.encodeComponent(spaceId)}');
+      }
+      return;
+    }
+
+    if (_creatingSharedSpace) return;
+    setState(() => _creatingSharedSpace = true);
+    try {
+      final result = await ref.read(sharedSpaceRepositoryProvider).createSpace(peerId);
+      await _loadSharedSpaces();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message)));
+        if (result.spaceId.isNotEmpty) {
+          context.go('/shared-space?spaceId=${Uri.encodeComponent(result.spaceId)}');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể tạo không gian chung: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _creatingSharedSpace = false);
     }
   }
 
@@ -506,6 +579,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Column(
       children: [
         _buildThreadHeader(showBack: showBack),
+        if (_canShowSharedSpaceAction())
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _creatingSharedSpace ? null : _onSharedSpaceAction,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor:
+                      _hasExistingSharedSpace() ? Colors.green.shade700 : SacoColors.sacoOrange,
+                  backgroundColor:
+                      _hasExistingSharedSpace() ? Colors.green.shade50 : SacoColors.pageBackground,
+                  side: BorderSide(
+                    color: _hasExistingSharedSpace() ? Colors.green : SacoColors.sacoOrange,
+                  ),
+                ),
+                child: Text(
+                  _creatingSharedSpace
+                      ? 'Đang xử lý…'
+                      : _hasExistingSharedSpace()
+                          ? 'Không gian chung'
+                          : 'Tạo không gian chung',
+                ),
+              ),
+            ),
+          ),
         Expanded(child: _buildMessageList()),
         if (_error != null)
           Padding(

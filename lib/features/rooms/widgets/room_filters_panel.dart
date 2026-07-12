@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../config/theme.dart';
+import '../../../core/utils/room_amenities.dart';
 import '../../../core/utils/vietnam_districts.dart';
 import '../../../models/room_post.dart';
 
@@ -10,14 +11,18 @@ class RoomFiltersPanel extends StatelessWidget {
     required this.filters,
     required this.onChanged,
     required this.onClose,
+    this.resultCount = 0,
     this.scrollable = false,
   });
 
   final RoomListFilters filters;
   final ValueChanged<RoomListFilters> onChanged;
   final VoidCallback onClose;
+  final int resultCount;
   /// When true, body scrolls inside a bounded height (map popup).
   final bool scrollable;
+
+  static const _selectedBg = Color(0xFF111827);
 
   @override
   Widget build(BuildContext context) {
@@ -76,12 +81,46 @@ class RoomFiltersPanel extends StatelessWidget {
           ),
           const Divider(height: 1),
           body,
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => onChanged(RoomListFilters()),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.grey.shade700,
+                      side: BorderSide(color: Colors.grey.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('Bỏ chọn'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: onClose,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: SacoColors.sacoOrange,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text('Xem kết quả ($resultCount)'),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildFields(List<FilterChipOption> districts) {
+    final districtValue = districts.any((d) => d.value == filters.district)
+        ? filters.district
+        : 'all';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -92,11 +131,10 @@ class RoomFiltersPanel extends StatelessWidget {
           runSpacing: 8,
           children: filterCityOptions.map((opt) {
             final selected = filters.city == opt.value;
-            return ChoiceChip(
-              label: Text(opt.label),
+            return _filterChip(
+              label: opt.label,
               selected: selected,
-              selectedColor: SacoColors.sacoOrange.withValues(alpha: 0.15),
-              onSelected: (_) {
+              onTap: () {
                 final next = filters.copy();
                 next.city = opt.value;
                 if (opt.value != filters.city) {
@@ -111,9 +149,8 @@ class RoomFiltersPanel extends StatelessWidget {
         _sectionTitle('Quận/Huyện'),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: districts.any((d) => d.value == filters.district)
-              ? filters.district
-              : 'all',
+          key: ValueKey('district-${filters.city}-$districtValue'),
+          initialValue: districtValue,
           decoration: _inputDecoration(),
           items: districts
               .map(
@@ -158,11 +195,10 @@ class RoomFiltersPanel extends StatelessWidget {
           runSpacing: 8,
           children: maxOccupantOptions.map((opt) {
             final selected = filters.maxOccupants == opt.value;
-            return ChoiceChip(
-              label: Text(opt.label),
+            return _filterChip(
+              label: opt.label,
               selected: selected,
-              selectedColor: SacoColors.sacoOrange.withValues(alpha: 0.15),
-              onSelected: (_) {
+              onTap: () {
                 final next = filters.copy();
                 next.maxOccupants = opt.value;
                 onChanged(next);
@@ -176,30 +212,53 @@ class RoomFiltersPanel extends StatelessWidget {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: amenityOptions.map((opt) {
-            final selected = filters.amenities.contains(opt.value);
-            return FilterChip(
-              label: Text(opt.label),
+          children: roomFilterAmenityOptions.map((opt) {
+            final selected = isRoomFilterAmenitySelected(filters.amenities, opt.value);
+            return _filterChip(
+              label: opt.label,
               selected: selected,
-              selectedColor: SacoColors.sacoOrange.withValues(alpha: 0.15),
-              onSelected: (v) {
+              onTap: () {
                 final next = filters.copy();
-                if (v) {
-                  next.amenities.add(opt.value);
-                } else {
-                  next.amenities.remove(opt.value);
-                }
+                applyAmenityToggle(next, opt.value, !selected);
                 onChanged(next);
               },
             );
           }).toList(),
         ),
-        const SizedBox(height: 16),
-        OutlinedButton(
-          onPressed: () => onChanged(RoomListFilters()),
-          child: const Text('Xóa tất cả bộ lọc'),
-        ),
       ],
+    );
+  }
+
+  Widget _filterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? _selectedBg : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? _selectedBg : Colors.grey.shade300,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: selected ? Colors.white : Colors.grey.shade700,
+            ),
+          ),
+        ),
+      ),
     );
   }
 

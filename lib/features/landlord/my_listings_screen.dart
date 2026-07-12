@@ -29,6 +29,10 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final paymentBanner = GoRouterState.of(context).uri.queryParameters['payment'] == 'completed'
+        ? 'Thanh toán thành công. Tin đăng chuyển sang chờ admin duyệt (nếu là tin mới).'
+        : null;
+
     final async = ref.watch(myListingsProvider);
     final priceFmt = NumberFormat('#,###', 'vi_VN');
 
@@ -48,6 +52,23 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                       title: 'Tin đã đăng',
                       subtitle: 'Quản lý trạng thái và nâng cấp VIP cho từng tin',
                     ),
+                    if (paymentBanner != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.green.shade200),
+                          ),
+                          child: Text(
+                            paymentBanner,
+                            style: TextStyle(fontSize: 13, color: Colors.green.shade900),
+                          ),
+                        ),
+                      ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                       child: SacoPrimaryButton(

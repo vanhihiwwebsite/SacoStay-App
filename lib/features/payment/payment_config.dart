@@ -1,5 +1,5 @@
-/// Payment backend is temporarily unavailable — UI-only checkout flow.
-const kPaymentUiOnlyMode = true;
+/// Real PayOS integration via backend API.
+const kPaymentUiOnlyMode = false;
 
 enum PaymentContext { tenant, landlord }
 
@@ -26,25 +26,32 @@ enum PaymentCheckoutPackage {
     amount: 80000,
     context: PaymentContext.tenant,
   ),
+  landlordBasic(
+    label: 'BASIC',
+    title: 'VIP BASIC',
+    priceLabel: '53.000đ/30 ngày',
+    amount: 53000,
+    context: PaymentContext.landlord,
+  ),
   landlordLite(
     label: 'LITE',
     title: 'VIP LITE',
-    priceLabel: '99.000đ/30 ngày',
-    amount: 99000,
+    priceLabel: '295.000đ/30 ngày',
+    amount: 295000,
     context: PaymentContext.landlord,
   ),
   landlordPro(
     label: 'PRO',
     title: 'VIP PRO',
-    priceLabel: '199.000đ/30 ngày',
-    amount: 199000,
+    priceLabel: '737.500đ/30 ngày',
+    amount: 737500,
     context: PaymentContext.landlord,
   ),
   landlordElite(
     label: 'ELITE',
     title: 'VIP ELITE',
-    priceLabel: '399.000đ/30 ngày',
-    amount: 399000,
+    priceLabel: '1.475.000đ/30 ngày',
+    amount: 1475000,
     context: PaymentContext.landlord,
   );
 
@@ -69,5 +76,9 @@ enum PaymentCheckoutPackage {
       if (pkg.label == key) return pkg;
     }
     return null;
+  }
+
+  static PaymentCheckoutPackage? fromLabel(String label) {
+    return fromQuery(label);
   }
 }

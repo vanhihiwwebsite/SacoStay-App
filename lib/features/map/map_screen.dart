@@ -10,6 +10,8 @@ import '../../core/utils/vip_tier.dart';
 import '../../models/room_post.dart';
 import '../rooms/room_providers.dart';
 import '../rooms/widgets/room_filters_panel.dart';
+import 'widgets/house_map_marker.dart';
+import 'widgets/map_room_popup.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -21,7 +23,7 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   final _mapController = MapController();
   final _searchController = TextEditingController();
-  final _filters = RoomListFilters();
+  RoomListFilters _filters = RoomListFilters();
   RoomPostSummary? _selectedRoom;
   bool _showFilters = false;
   bool _showMobileList = false;
@@ -39,17 +41,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void _centerOnCity(String city) {
     _mapCity = city;
     final target = city == 'TP.HCM' ? _hcm : _hanoi;
-    _mapController.move(target, 11);
+    _mapController.move(target, 12);
   }
 
-  void _selectRoom(RoomPostSummary room) {
-    setState(() => _selectedRoom = room);
+  void _selectRoom(RoomPostSummary room, {bool collapseList = false}) {
+    setState(() {
+      _selectedRoom = room;
+      if (collapseList) _showMobileList = false;
+    });
     if (room.hasCoordinates) {
       _mapController.move(
         LatLng(room.latitude!, room.longitude!),
-        _mapController.camera.zoom,
+        16,
       );
     }
+  }
+
+  void _clearSelection() {
+    if (_selectedRoom == null) return;
+    setState(() => _selectedRoom = null);
   }
 
   @override
@@ -79,6 +89,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               rooms: onMap,
               selectedRoom: _selectedRoom,
               onSelect: _selectRoom,
+              onClearSelection: _clearSelection,
               initialCenter: _mapCity == 'TP.HCM' ? _hcm : _hanoi,
             );
 
@@ -92,14 +103,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               onSearchChanged: () => setState(() {}),
               onToggleFilters: () => setState(() => _showFilters = !_showFilters),
               onFiltersChanged: (f) => setState(() {
-                _filters.city = f.city;
-                _filters.district = f.district;
-                _filters.priceMin = f.priceMin;
-                _filters.priceMax = f.priceMax;
-                _filters.maxOccupants = f.maxOccupants;
-                _filters.amenities
-                  ..clear()
-                  ..addAll(f.amenities);
+                _filters = f.copy();
                 if (f.city == 'Hà Nội' || f.city == 'TP.HCM') {
                   _centerOnCity(f.city);
                 }
@@ -122,6 +126,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       children: [
                         mapArea,
                         overlays,
+                        if (_selectedRoom != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 88,
+                            child: Align(
+                              child: MapRoomPopup(
+                                room: _selectedRoom!,
+                                onClose: _clearSelection,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -156,15 +172,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       child: Text('Danh sách (${filtered.length})'),
                     ),
                   ),
+                if (_selectedRoom != null && !_showMobileList)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 88,
+                    child: Align(
+                      child: MapRoomPopup(
+                        room: _selectedRoom!,
+                        onClose: _clearSelection,
+                      ),
+                    ),
+                  ),
                 if (_showMobileList && !isWide)
                   _MobileListSheet(
                     rooms: filtered,
                     selectedRoom: _selectedRoom,
                     onClose: () => setState(() => _showMobileList = false),
-                    onSelect: (room) {
-                      _selectRoom(room);
-                      setState(() => _showMobileList = false);
-                    },
+                    onSelect: (room) => _selectRoom(room, collapseList: true),
                     onDetail: (id) {
                       setState(() => _showMobileList = false);
                       context.push('/rooms/$id');
@@ -185,6 +210,7 @@ class _MapArea extends StatelessWidget {
     required this.rooms,
     required this.selectedRoom,
     required this.onSelect,
+    required this.onClearSelection,
     required this.initialCenter,
   });
 
@@ -192,6 +218,7 @@ class _MapArea extends StatelessWidget {
   final List<RoomPostSummary> rooms;
   final RoomPostSummary? selectedRoom;
   final ValueChanged<RoomPostSummary> onSelect;
+  final VoidCallback onClearSelection;
   final LatLng initialCenter;
 
   @override
@@ -200,8 +227,8 @@ class _MapArea extends StatelessWidget {
       mapController: controller,
       options: MapOptions(
         initialCenter: initialCenter,
-        initialZoom: 11,
-        onTap: (_, __) {},
+        initialZoom: 12,
+        onTap: (_, __) => onClearSelection(),
       ),
       children: [
         TileLayer(
@@ -211,28 +238,16 @@ class _MapArea extends StatelessWidget {
         MarkerLayer(
           markers: rooms.map((room) {
             final selected = selectedRoom?.id == room.id;
-            final color = vipTierMarkerColor(room.vipTier, selected: selected);
             return Marker(
               point: LatLng(room.latitude!, room.longitude!),
-              width: selected ? 28 : 22,
-              height: selected ? 28 : 22,
+              width: 36,
+              height: 42,
+              alignment: Alignment.bottomCenter,
               child: GestureDetector(
                 onTap: () => onSelect(room),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white,
-                      width: selected ? 3 : 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        blurRadius: 4,
-                      ),
-                    ],
-                  ),
+                child: HouseMapMarker(
+                  tier: room.vipTier,
+                  selected: selected,
                 ),
               ),
             );
@@ -329,6 +344,7 @@ class _MapOverlays extends StatelessWidget {
                     child: RoomFiltersPanel(
                       scrollable: true,
                       filters: filters,
+                      resultCount: filteredCount,
                       onChanged: onFiltersChanged,
                       onClose: onCloseFilters,
                     ),
@@ -446,9 +462,7 @@ class _RoomSidebar extends StatelessWidget {
                 final room = rooms[i];
                 final selected = selectedRoom?.id == room.id;
                 return Material(
-                  color: selected
-                      ? SacoColors.sacoOrange.withValues(alpha: 0.08)
-                      : Colors.transparent,
+                  color: selected ? SacoColors.sacoOrange : Colors.transparent,
                   child: InkWell(
                     onTap: () => onSelect(room),
                     child: Padding(
@@ -477,13 +491,16 @@ class _RoomSidebar extends StatelessWidget {
                                   room.title,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: vipTierTitleStyle(room.vipTier).copyWith(fontSize: 13),
+                                  style: vipTierTitleStyle(room.vipTier).copyWith(
+                                    fontSize: 13,
+                                    color: selected ? Colors.white : null,
+                                  ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  priceShort(room.price),
-                                  style: const TextStyle(
-                                    color: SacoColors.sacoOrange,
+                                  mapListPrice(room.price),
+                                  style: TextStyle(
+                                    color: selected ? Colors.white : SacoColors.sacoOrange,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 12,
                                   ),
@@ -572,14 +589,61 @@ class _MobileListSheet extends StatelessWidget {
                       itemCount: rooms.length,
                       itemBuilder: (_, i) {
                         final room = rooms[i];
-                        return ListTile(
-                          selected: selectedRoom?.id == room.id,
-                          onTap: () => onSelect(room),
-                          leading: room.imageUrl != null
-                              ? Image.network(room.imageUrl!, width: 48, height: 48, fit: BoxFit.cover)
-                              : const Icon(Icons.home_outlined),
-                          title: Text(room.title, maxLines: 2),
-                          subtitle: Text(priceShort(room.price)),
+                        final selected = selectedRoom?.id == room.id;
+                        return Material(
+                          color: selected ? SacoColors.sacoOrange : Colors.white,
+                          child: InkWell(
+                            onTap: () => onSelect(room),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              child: Row(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: room.imageUrl != null
+                                        ? Image.network(
+                                            room.imageUrl!,
+                                            width: 56,
+                                            height: 48,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Container(
+                                            width: 56,
+                                            height: 48,
+                                            color: Colors.grey.shade200,
+                                            child: const Icon(Icons.home_outlined),
+                                          ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          room.title,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            color: selected ? Colors.white : SacoColors.sacoBlue,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          mapListPrice(room.price),
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                            color: selected ? Colors.white : SacoColors.sacoOrange,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         );
                       },
                     ),

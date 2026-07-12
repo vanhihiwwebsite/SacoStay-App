@@ -1,14 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../config/theme.dart';
+import '../../core/utils/listing_display.dart';
+import '../../models/room_post.dart';
+import '../../repositories/room_post_repository.dart';
 import '../../shared/widgets/saco_landlord_ui.dart';
 import '../payment/payment_config.dart';
+import '../payment/payment_launcher.dart';
 
-class LandlordPricingScreen extends StatelessWidget {
+class LandlordPricingScreen extends ConsumerStatefulWidget {
   const LandlordPricingScreen({super.key, this.postId});
 
   final String? postId;
+
+  @override
+  ConsumerState<LandlordPricingScreen> createState() => _LandlordPricingScreenState();
+}
+
+class _LandlordPricingScreenState extends ConsumerState<LandlordPricingScreen> {
+  String? _roomPostId;
+  bool _loadingPosts = false;
+  String? _payingPackage;
+  String? _errorMessage;
 
   static const _tiers = ['BASIC', 'LITE', 'PRO', 'ELITE'];
   static const _tierColors = [
@@ -18,15 +32,14 @@ class LandlordPricingScreen extends StatelessWidget {
     Color(0xFFEF4444),
   ];
   static const _packages = [
-    null,
+    PaymentCheckoutPackage.landlordBasic,
     PaymentCheckoutPackage.landlordLite,
     PaymentCheckoutPackage.landlordPro,
     PaymentCheckoutPackage.landlordElite,
   ];
 
-  /// Feature rows: label + per-tier cell value.
   static const _rows = <_PricingRow>[
-    _PricingRow('Giá 30 ngày', ['Miễn phí', '475.000', '975.000', '1.475.000'], bold: true),
+    _PricingRow('Giá 30 ngày', ['53.000', '295.000', '737.500', '1.475.000'], bold: true),
     _PricingRow('Nhãn dán nổi bật', ['—', 'MÀU XANH', 'MÀU CAM, IN HOA', 'MÀU ĐỎ, IN HOA'], highlight: true),
     _PricingRow('Kích thước tin', ['Nhỏ', 'Vừa', 'Lớn', 'Rất lớn']),
     _PricingRow('Ưu tiên duyệt (30-60 phút)', [false, true, true, true]),
@@ -36,13 +49,58 @@ class LandlordPricingScreen extends StatelessWidget {
     _PricingRow('Phân tích người xem', [false, true, false, true]),
   ];
 
-  void _checkout(BuildContext context, PaymentCheckoutPackage pkg) {
-    final params = <String, String>{
-      'package': pkg.label,
-      'context': PaymentContext.landlord.queryValue,
-    };
-    if (postId != null && postId!.isNotEmpty) params['postId'] = postId!;
-    context.go(Uri(path: '/payment/checkout', queryParameters: params).toString());
+  @override
+  void initState() {
+    super.initState();
+    _roomPostId = widget.postId;
+    if (_roomPostId == null || _roomPostId!.isEmpty) {
+      _resolvePostId();
+    }
+  }
+
+  Future<void> _resolvePostId() async {
+    setState(() => _loadingPosts = true);
+    try {
+      final posts = await ref.read(roomPostRepositoryProvider).getMyPosts();
+      RoomPostSummary? pending;
+      for (final p in posts) {
+        if (isListingPendingPayment(p.status) ||
+            isListingPendingApproval(p.status) ||
+            (p.status ?? '').isEmpty) {
+          pending = p;
+          break;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _roomPostId = pending?.id ?? (posts.isNotEmpty ? posts.first.id : '');
+        _loadingPosts = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingPosts = false);
+    }
+  }
+
+  Future<void> _pay(PaymentCheckoutPackage pkg) async {
+    final postId = _roomPostId ?? '';
+    if (postId.isEmpty) {
+      setState(() {
+        _errorMessage =
+            'Chưa có tin đăng để thanh toán. Hãy đăng tin trước hoặc chọn tin từ Tin đã đăng.';
+      });
+      return;
+    }
+    setState(() {
+      _errorMessage = null;
+      _payingPackage = pkg.label;
+    });
+    await launchLandlordPackagePayment(
+      context: context,
+      ref: ref,
+      roomPostId: postId,
+      packageName: pkg.label,
+    );
+    if (mounted) setState(() => _payingPackage = null);
   }
 
   @override
@@ -53,34 +111,46 @@ class LandlordPricingScreen extends StatelessWidget {
         children: [
           SacoPageHeader(
             title: 'Bảng giá VIP',
-            subtitle: postId != null
+            subtitle: _roomPostId != null && _roomPostId!.isNotEmpty
                 ? 'Nâng cấp tin đăng để tiếp cận nhiều người thuê hơn'
                 : 'Chọn gói phù hợp — tin VIP hiển thị nổi bật trên bản đồ & danh sách',
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              'Vuốt ngang bảng để xem đủ các gói →',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-              textAlign: TextAlign.right,
-            ),
-          ),
-          if (kPaymentUiOnlyMode)
+          if (_loadingPosts)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Đang tìm tin đăng…',
+                style: TextStyle(fontSize: 13, color: Colors.orange.shade700),
+              ),
+            )
+          else if (_roomPostId == null || _roomPostId!.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Chưa có tin. Đăng tin trước khi thanh toán gói VIP.',
+                style: TextStyle(fontSize: 13, color: Colors.red.shade700),
+              ),
+            ),
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: Colors.red.shade50,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.blue.shade100),
+                  border: Border.all(color: Colors.red.shade100),
                 ),
-                child: const Text(
-                  'Thanh toán demo — backend PayOS tạm bảo trì.',
-                  style: TextStyle(fontSize: 12),
-                ),
+                child: Text(_errorMessage!, style: TextStyle(fontSize: 12, color: Colors.red.shade800)),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Thanh toán qua PayOS — hoàn tất trong app rồi xem kết quả.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: DecoratedBox(
@@ -105,7 +175,9 @@ class LandlordPricingScreen extends StatelessWidget {
                         _PayRow(
                           packages: _packages,
                           colors: _tierColors,
-                          onPay: (pkg) => _checkout(context, pkg),
+                          payingPackage: _payingPackage,
+                          enabled: _roomPostId != null && _roomPostId!.isNotEmpty,
+                          onPay: _pay,
                         ),
                       ],
                     ),
@@ -306,11 +378,15 @@ class _PayRow extends StatelessWidget {
     required this.packages,
     required this.colors,
     required this.onPay,
+    required this.enabled,
+    this.payingPackage,
   });
 
-  final List<PaymentCheckoutPackage?> packages;
+  final List<PaymentCheckoutPackage> packages;
   final List<Color> colors;
   final ValueChanged<PaymentCheckoutPackage> onPay;
+  final bool enabled;
+  final String? payingPackage;
 
   @override
   Widget build(BuildContext context) {
@@ -329,27 +405,23 @@ class _PayRow extends StatelessWidget {
                 decoration: BoxDecoration(
                   border: Border(left: BorderSide(color: Colors.grey.shade200)),
                 ),
-                child: packages[i] == null
-                    ? Text(
-                        'Mặc định',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                      )
-                    : FilledButton(
-                        onPressed: () => onPay(packages[i]!),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: colors[i],
-                          minimumSize: const Size(88, 34),
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'Thanh toán',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                        ),
-                      ),
+                child: FilledButton(
+                  onPressed: !enabled || payingPackage != null
+                      ? null
+                      : () => onPay(packages[i]),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colors[i],
+                    minimumSize: const Size(88, 34),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    payingPackage == packages[i].label ? 'Đang xử lý…' : 'Thanh toán',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                  ),
+                ),
               ),
             ),
         ],

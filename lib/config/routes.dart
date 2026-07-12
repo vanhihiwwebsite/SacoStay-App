@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/utils/auth_navigation.dart';
 import '../core/utils/user_display.dart';
 import '../features/admin/admin_dashboard_screen.dart';
 import '../features/auth/auth_provider.dart';
@@ -24,14 +25,18 @@ import '../features/legal/terms_screen.dart';
 import '../features/map/map_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/onboarding/identity_verification_screen.dart';
+import '../features/payment/payos_webview_screen.dart';
 import '../features/payment/payment_checkout_screen.dart';
 import '../features/payment/payment_config.dart';
+import '../features/payment/payment_launcher.dart';
 import '../features/payment/payment_result_screen.dart';
 import '../features/pricing/tenant_pricing_screen.dart';
 import '../features/profile/profile_setup_screen.dart';
 import '../features/profile/user_profile_screen.dart';
 import '../features/rooms/room_detail_screen.dart';
 import '../features/rooms/rooms_screen.dart';
+import '../features/shared_space/shared_space_screen.dart';
+import '../features/tenant_room/tenant_room_profile_screen.dart';
 import '../shared/widgets/role_shells.dart';
 import '../shared/widgets/saco_scaffold.dart';
 
@@ -81,6 +86,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/admin',
         '/notifications',
         '/payment/checkout',
+        '/payment/payos',
+        '/payment/result',
+        '/tenant-room-profile',
+        '/shared-space',
       ];
       final needsAuth = protectedPrefixes.any(
         (p) => path == p || path.startsWith('$p/'),
@@ -111,6 +120,14 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       if (path == '/owner/my-posts') return '/my-listings';
       if (path == '/landlord-chat') return '/chat';
+
+      final ekycRedirect = ekycVerificationRedirect(
+        loggedIn: loggedIn,
+        user: user,
+        path: path,
+        fullLocation: state.uri.toString(),
+      );
+      if (ekycRedirect != null) return ekycRedirect;
 
       return null;
     },
@@ -144,6 +161,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/discovery',
         builder: (_, __) => const SacoScaffold(body: DiscoveryScreen()),
+      ),
+      GoRoute(
+        path: '/tenant-room-profile',
+        builder: (_, state) => SacoScaffold(
+          body: TenantRoomProfileScreen(
+            returnUrl: state.uri.queryParameters['returnUrl'],
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/shared-space',
+        builder: (_, state) => SacoScaffold(
+          body: SharedSpaceScreen(
+            spaceId: state.uri.queryParameters['spaceId'],
+          ),
+        ),
       ),
       GoRoute(
         path: '/lifestyle-quiz',
@@ -211,6 +244,24 @@ final routerProvider = Provider<GoRouter>((ref) {
             initialPostId: state.pathParameters['id'],
           ),
         ),
+      ),
+      GoRoute(
+        path: '/payment/payos',
+        builder: (_, state) {
+          final args = state.extra as PayOsLaunchArgs?;
+          if (args == null || args.paymentUrl.isEmpty) {
+            return const SacoScaffold(
+              body: Center(child: Text('Thông tin thanh toán không hợp lệ')),
+            );
+          }
+          final screen = PayOsWebViewScreen(
+            paymentUrl: args.paymentUrl,
+            paymentContext: args.paymentContext,
+            package: args.package,
+            postId: args.postId,
+          );
+          return SacoScaffold(body: screen);
+        },
       ),
       GoRoute(
         path: '/payment/checkout',

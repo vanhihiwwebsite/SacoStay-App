@@ -11,6 +11,7 @@ import '../../models/lifestyle.dart';
 import '../../models/tenant_room_profile.dart';
 import '../../repositories/lifestyle_repository.dart';
 import '../../repositories/tenant_room_repository.dart';
+import '../../shared/widgets/profile_photos_modal.dart';
 import '../discovery/widgets/tenant_room_details_view.dart';
 
 class UserProfileScreen extends ConsumerStatefulWidget {
@@ -198,8 +199,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           if (!isLandlord) ...[
             const SizedBox(height: 16),
             _lifestyleCard(),
-          ],
-          if (_hasRoom && !isLandlord) ...[
             const SizedBox(height: 16),
             _roomCard(),
           ],
@@ -225,7 +224,26 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       ),
       child: Column(
         children: [
-          CircleAvatar(radius: 56, backgroundImage: NetworkImage(_avatarUrl)),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              CircleAvatar(radius: 56, backgroundImage: NetworkImage(_avatarUrl)),
+              if (isVerifiedUser(_user))
+                Positioned(
+                  right: 4,
+                  bottom: 4,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade500,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: const Icon(Icons.check, size: 16, color: Colors.white),
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 12),
           Text(
             _displayName,
@@ -278,7 +296,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             ],
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: () => context.go('/profile-setup'),
+              onPressed: () => showProfilePhotosModal(context, ref),
               icon: const Icon(Icons.photo_library_outlined, size: 18),
               label: const Text('Đăng ảnh cá nhân'),
             ),
@@ -388,6 +406,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   }
 
   Widget _lifestyleCard() {
+    final displayAnswers = lifestyleAnswersForDisplay(_answers);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -400,7 +419,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         children: [
           const Text('Chi tiết lối sống', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 12),
-          if (_answers.isEmpty)
+          if (displayAnswers.isEmpty)
             Text(
               _isOwn
                   ? 'Chưa có dữ liệu trắc nghiệm.'
@@ -408,46 +427,83 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               style: TextStyle(color: Colors.grey.shade600),
             )
           else
-            ..._answers.map((a) {
-              final match = !_isOwn && _isAnswerMatch(a);
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: match ? Colors.green.shade50 : SacoColors.pageBackground,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: match ? Colors.green.shade200 : Colors.orange.shade100,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      a.questionContent,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: SacoColors.sacoOrange,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 520;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: displayAnswers.map((a) {
+                    final match = !_isOwn && _isAnswerMatch(a);
+                    return SizedBox(
+                      width: wide ? (constraints.maxWidth - 12) / 2 : constraints.maxWidth,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: match ? Colors.green.shade50 : const Color(0xFFFFFBF7),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: match ? Colors.green.shade200 : Colors.orange.shade100,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: match ? Colors.green.shade500 : Colors.grey.shade300,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    lifestyleAnswerLabel(a),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: SacoColors.sacoOrange,
+                                    ),
+                                  ),
+                                ),
+                                if (match)
+                                  Text(
+                                    'Trùng khớp',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.green.shade700,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 16),
+                              child: Text(
+                                a.optionContent,
+                                style: const TextStyle(fontSize: 14, height: 1.35),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(a.optionContent, style: const TextStyle(fontSize: 14)),
-                    if (match)
-                      Text(
-                        'Trùng khớp',
-                        style: TextStyle(fontSize: 11, color: Colors.green.shade700),
-                      ),
-                  ],
-                ),
-              );
-            }),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
         ],
       ),
     );
   }
 
   Widget _roomCard() {
+    final hasRoom = _hasRoom;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -462,26 +518,62 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             children: [
               const Icon(Icons.home_outlined, color: SacoColors.sacoOrange),
               const SizedBox(width: 8),
-              const Text('Tình trạng phòng', style: TextStyle(fontWeight: FontWeight.bold)),
-              const Spacer(),
+              const Expanded(
+                child: Text('Tình trạng phòng', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: SacoColors.sacoOrange,
+                  color: hasRoom ? Colors.green.shade100 : Colors.yellow.shade100,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  'Đã có phòng trọ',
-                  style: TextStyle(color: Colors.white, fontSize: 12),
+                child: Text(
+                  roomStatusLabel(hasRoom),
+                  style: TextStyle(
+                    color: hasRoom ? Colors.green.shade800 : Colors.yellow.shade900,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          if (_tenantRoom != null)
-            TenantRoomDetailsView(
-              profile: _tenantRoom,
-              priceLabel: tenantRoomPriceLabel(_tenantRoom?.price),
+          if (hasRoom) ...[
+            if (_tenantRoom != null)
+              TenantRoomDetailsView(
+                profile: _tenantRoom,
+                priceLabel: tenantRoomPriceLabel(_tenantRoom?.price),
+              )
+            else if (_isOwn)
+              Text(
+                'Chưa có chi tiết phòng trọ. Hãy thêm địa điểm, giá thuê và tiện nghi.',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              )
+            else
+              Text(
+                'Người dùng chưa cập nhật chi tiết phòng trọ.',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              ),
+            if (_isOwn) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => context.go(
+                  '/tenant-room-profile?returnUrl=${Uri.encodeComponent('/profile/me')}',
+                ),
+                child: Text(
+                  _tenantRoom != null ? 'Chỉnh sửa thông tin phòng' : 'Thêm thông tin phòng',
+                  style: const TextStyle(
+                    color: SacoColors.sacoOrange,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ] else
+            Text(
+              'Đang tìm kiếm phòng trọ và bạn cùng phòng phù hợp.',
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
             ),
         ],
       ),

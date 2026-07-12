@@ -21,12 +21,16 @@ class RoomCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tier = room.vipTier;
+    final address = room.address ??
+        [room.district, room.city].whereType<String>().where((s) => s.isNotEmpty).join(', ');
+
     return Material(
       color: Colors.white,
-      elevation: 0,
+      elevation: 2,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: SacoColors.sacoOrange.withValues(alpha: 0.15)),
+        side: BorderSide(color: SacoColors.sacoOrange.withValues(alpha: 0.12)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -35,7 +39,7 @@ class RoomCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AspectRatio(
-              aspectRatio: compact ? 16 / 10 : 16 / 11,
+              aspectRatio: 4 / 3,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -51,22 +55,19 @@ class RoomCard extends StatelessWidget {
                     bottom: 12,
                     left: 12,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: vipTierPriceBadgeColor(tier),
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
+                            color: Colors.black.withValues(alpha: 0.2),
                             blurRadius: 6,
                           ),
                         ],
                       ),
                       child: Text(
-                        priceShort(room.price),
+                        formatRoomListPrice(room.price),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -79,7 +80,7 @@ class RoomCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -87,31 +88,34 @@ class RoomCard extends StatelessWidget {
                     room.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: vipTierTitleStyle(tier, compact: compact),
+                    style: vipTierTitleStyle(tier).copyWith(fontSize: compact ? 16 : 17),
                   ),
-                  if (room.address != null && room.address!.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      room.address!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 12,
-                      ),
+                  if (address.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 16,
+                          color: SacoColors.sacoOrange.withValues(alpha: 0.85),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            address,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      if (room.area != null)
-                        _metaChip('${room.area!.round()} m²'),
-                      if (room.maxPeople != null)
-                        _metaChip('${room.currentPeople ?? 0}/${room.maxPeople} người'),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -126,20 +130,6 @@ class RoomCard extends StatelessWidget {
       color: Colors.grey.shade200,
       child: const Center(
         child: Icon(Icons.home_outlined, size: 48, color: Colors.grey),
-      ),
-    );
-  }
-
-  Widget _metaChip(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: SacoColors.pageBackground,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
       ),
     );
   }

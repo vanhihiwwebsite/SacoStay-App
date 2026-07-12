@@ -9,7 +9,9 @@ import '../../core/utils/user_display.dart';
 import '../../core/utils/vip_tier.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../models/room_post.dart';
+import '../../models/shared_space.dart';
 import '../../repositories/room_post_repository.dart';
+import '../../repositories/shared_space_repository.dart';
 import 'room_providers.dart';
 
 class RoomDetailScreen extends ConsumerStatefulWidget {
@@ -24,6 +26,89 @@ class RoomDetailScreen extends ConsumerStatefulWidget {
 class _RoomDetailScreenState extends ConsumerState<RoomDetailScreen> {
   int _galleryIndex = 0;
   bool _viewRecorded = false;
+  List<SharedSpaceSummary> _sharedSpaces = [];
+  bool _addingToShortlist = false;
+
+  Future<void> _loadSharedSpaceState(String roomId) async {
+    if (!ref.read(authControllerProvider).isLoggedIn) return;
+    if (isLandlordUser(ref.read(authControllerProvider).user?.raw)) return;
+    try {
+      final spaces = await ref.read(sharedSpaceRepositoryProvider).listSpaces();
+      if (!mounted) return;
+      setState(() => _sharedSpaces = spaces);
+    } catch (_) {
+      if (mounted) setState(() => _sharedSpaces = []);
+    }
+  }
+
+  List<SharedSpaceSummary> get _activeSharedSpaces =>
+      _sharedSpaces.where((s) => s.status == 'Active').toList();
+
+  List<SharedSpaceSummary> _addableSpaces(String roomId) =>
+      _activeSharedSpaces.where((s) => !s.shortlistRoomIds.contains(roomId)).toList();
+
+  bool _sharedShortlistAdded(String roomId) {
+    if (_activeSharedSpaces.isEmpty) return false;
+    return _activeSharedSpaces.every((s) => s.shortlistRoomIds.contains(roomId));
+  }
+
+  Future<void> _addToSharedShortlist(RoomPostDetail room) async {
+    if (_addingToShortlist) return;
+    final candidates = _addableSpaces(room.id);
+    if (candidates.isEmpty) return;
+
+    String spaceId;
+    if (candidates.length == 1) {
+      spaceId = candidates.first.id;
+    } else {
+      final picked = await showModalBottomSheet<SharedSpaceSummary>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Chọn không gian chung',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              ...candidates.map(
+                (s) => ListTile(
+                  title: Text(s.partnerName),
+                  subtitle: Text('${s.shortlistRoomIds.length} phòng trong danh sách'),
+                  onTap: () => Navigator.pop(ctx, s),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (picked == null) return;
+      spaceId = picked.id;
+    }
+
+    setState(() => _addingToShortlist = true);
+    try {
+      final partner = _sharedSpaces.firstWhere((s) => s.id == spaceId).partnerName;
+      final msg = await ref.read(sharedSpaceRepositoryProvider).addToShortlist(spaceId, room.id);
+      await _loadSharedSpaceState(room.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$msg\n$partner')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể thêm phòng: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _addingToShortlist = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +139,7 @@ class _RoomDetailScreenState extends ConsumerState<RoomDetailScreen> {
         if (auth.isLoggedIn && !_viewRecorded) {
           _viewRecorded = true;
           ref.read(roomPostRepositoryProvider).recordView(room.id);
+          _loadSharedSpaceState(room.id);
         }
 
         final images = room.galleryImages;
@@ -104,6 +190,10 @@ class _RoomDetailScreenState extends ConsumerState<RoomDetailScreen> {
                     canMessage: !isLandlord &&
                         room.landlordUserId != null &&
                         room.landlordUserId!.isNotEmpty,
+                    canAddToSharedShortlist: !isLandlord && _addableSpaces(room.id).isNotEmpty,
+                    sharedShortlistAdded: _sharedShortlistAdded(room.id),
+                    addingToShortlist: _addingToShortlist,
+                    onAddToSharedShortlist: () => _addToSharedShortlist(room),
                     onChat: () {
                       final id = room.landlordUserId!;
                       context.go(
@@ -403,12 +493,20 @@ class _PriceSidebar extends StatelessWidget {
     required this.room,
     required this.isLandlord,
     required this.canMessage,
+    required this.canAddToSharedShortlist,
+    required this.sharedShortlistAdded,
+    required this.addingToShortlist,
+    required this.onAddToSharedShortlist,
     required this.onChat,
   });
 
   final RoomPostDetail room;
   final bool isLandlord;
   final bool canMessage;
+  final bool canAddToSharedShortlist;
+  final bool sharedShortlistAdded;
+  final bool addingToShortlist;
+  final VoidCallback onAddToSharedShortlist;
   final VoidCallback onChat;
 
   @override
@@ -440,6 +538,25 @@ class _PriceSidebar extends StatelessWidget {
           const Text('/tháng', style: TextStyle(color: Colors.grey)),
           if (!isLandlord) ...[
             const SizedBox(height: 20),
+            if (canAddToSharedShortlist)
+              OutlinedButton(
+                onPressed: addingToShortlist ? null : onAddToSharedShortlist,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: SacoColors.sacoOrange,
+                  side: const BorderSide(color: SacoColors.sacoOrange, width: 2),
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child: Text(addingToShortlist ? 'Đang thêm…' : 'Thêm vào nhóm'),
+              ),
+            if (sharedShortlistAdded) ...[
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: null,
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                child: const Text('Đã thêm vào danh sách chung'),
+              ),
+            ],
+            const SizedBox(height: 8),
             FilledButton(
               onPressed: () {},
               style: FilledButton.styleFrom(

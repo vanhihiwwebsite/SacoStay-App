@@ -78,21 +78,6 @@ List<FilterChipOption> districtFilterOptions(String city) {
   ];
 }
 
-const amenityOptions = [
-  FilterChipOption(value: 'Điều hòa', label: '❄️ Điều hòa'),
-  FilterChipOption(value: 'Ban công', label: '🌿 Ban công'),
-  FilterChipOption(value: 'WiFi', label: '📶 WiFi'),
-  FilterChipOption(value: 'Nóng lạnh', label: '🚿 Nóng lạnh'),
-  FilterChipOption(value: 'Máy giặt', label: '👕 Máy giặt'),
-  FilterChipOption(value: 'Bếp riêng', label: '🍳 Bếp riêng'),
-  FilterChipOption(value: 'Thang máy', label: '🛗 Thang máy'),
-  FilterChipOption(value: 'Bảo vệ 24/7', label: '🛡️ Bảo vệ 24/7'),
-  FilterChipOption(value: 'Chỗ để xe', label: '🏍️ Chỗ để xe'),
-  FilterChipOption(value: 'Tủ lạnh', label: '🧊 Tủ lạnh'),
-  FilterChipOption(value: 'Full nội thất', label: '🛋️ Full nội thất'),
-  FilterChipOption(value: 'Hồ bơi chung', label: '🏊 Hồ bơi chung'),
-];
-
 const maxOccupantOptions = [
   FilterChipOption(value: 'all', label: 'Tất cả'),
   FilterChipOption(value: '1', label: '1 người'),
