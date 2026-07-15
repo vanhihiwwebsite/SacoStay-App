@@ -66,5 +66,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>SacoStay cần camera để quét khuôn mặt xác thực eKYC.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>SacoStay cần quyền micro khi quay video xác thực (nếu thiết bị yêu cầu).</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SacoStay cần truy cập thư viện ảnh để tải ảnh CCCD.</string>
 </dict>
 </plist>

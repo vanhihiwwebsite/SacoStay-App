@@ -6,16 +6,18 @@ import 'package:image_picker/image_picker.dart';
 import '../../config/theme.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/utils/kyc_display.dart';
+import '../../core/utils/kyc_upload.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../models/kyc.dart';
 import '../../repositories/kyc_repository.dart';
+import 'widgets/ekyc_id_upload_card.dart';
+import 'widgets/ekyc_liveness_camera.dart';
 
 enum _EkycStep { idImages, faceVideo }
 
 enum _SubmitState { idle, submitting, success, error }
 
 /// eKYC: BE gọi FPT.AI khi submit — không chờ admin duyệt thủ công.
-/// Thành công → `Approved` + `isVerified=true` ngay sau khi so khớp CCCD + video.
 class IdentityVerificationScreen extends ConsumerStatefulWidget {
   const IdentityVerificationScreen({super.key});
 
@@ -27,10 +29,14 @@ class IdentityVerificationScreen extends ConsumerStatefulWidget {
 class _IdentityVerificationScreenState
     extends ConsumerState<IdentityVerificationScreen> {
   final _picker = ImagePicker();
+  final _cameraKey = GlobalKey<EkycLivenessCameraState>();
+
   _EkycStep _step = _EkycStep.idImages;
   _SubmitState _submitState = _SubmitState.idle;
   bool _statusLoading = true;
   bool _submitting = false;
+  EkycCameraPhase _cameraPhase = EkycCameraPhase.idle;
+  bool _cameraBusy = false;
   String? _error;
   String? _adminNote;
   String? _successMessage;
@@ -38,7 +44,6 @@ class _IdentityVerificationScreenState
 
   String? _frontPath;
   String? _backPath;
-  String? _videoPath;
 
   String get _returnUrl =>
       GoRouterState.of(context).uri.queryParameters['returnUrl'] ?? '/profile-setup';
@@ -95,31 +100,39 @@ class _IdentityVerificationScreenState
   Future<void> _pickId(bool front) async {
     final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (file == null) return;
+
+    final err = validateKycIdImagePath(file.path);
+    if (err != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      }
+      return;
+    }
+
     setState(() {
       if (front) {
         _frontPath = file.path;
       } else {
         _backPath = file.path;
       }
-    });
-  }
-
-  Future<void> _pickVideo() async {
-    final file = await _picker.pickVideo(
-      source: ImageSource.camera,
-      maxDuration: const Duration(seconds: 6),
-    );
-    if (file == null) return;
-    setState(() {
-      _videoPath = file.path;
-      _submitState = _SubmitState.idle;
       _error = null;
     });
   }
 
-  Future<void> _submit() async {
-    if (_frontPath == null || _backPath == null || _videoPath == null) {
-      setState(() => _error = 'Vui lòng tải đủ ảnh CCCD và video selfie.');
+  void _clearFront() => setState(() => _frontPath = null);
+  void _clearBack() => setState(() => _backPath = null);
+
+  Future<void> _onVideoRecorded(String path) async {
+    setState(() {
+      _error = null;
+      _submitState = _SubmitState.idle;
+    });
+    await _submit(selfieVideoPath: path);
+  }
+
+  Future<void> _submit({required String selfieVideoPath}) async {
+    if (_frontPath == null || _backPath == null) {
+      setState(() => _error = 'Thiếu ảnh CCCD. Quay lại bước 1.');
       return;
     }
 
@@ -133,7 +146,7 @@ class _IdentityVerificationScreenState
       final msg = await ref.read(kycRepositoryProvider).submit(
             frontIdPath: _frontPath!,
             backIdPath: _backPath!,
-            selfieVideoPath: _videoPath!,
+            selfieVideoPath: selfieVideoPath,
           );
       await ref.read(authControllerProvider.notifier).refreshProfile();
       final kyc = await ref.read(kycRepositoryProvider).getMyStatus();
@@ -177,9 +190,35 @@ class _IdentityVerificationScreenState
       setState(() {
         _submitting = false;
         _submitState = _SubmitState.error;
-        _error = e.toString();
+        _error = getApiErrorMessage(e);
       });
     }
+  }
+
+  void _syncCameraUi() {
+    final state = _cameraKey.currentState;
+    setState(() {
+      _cameraPhase = state?.phase ?? EkycCameraPhase.idle;
+      _cameraBusy = state?.isBusy ?? false;
+    });
+  }
+
+  void _retryScan() {
+    setState(() {
+      _submitState = _SubmitState.idle;
+      _error = null;
+    });
+  }
+
+  void _backToStep1() async {
+    await _cameraKey.currentState?.stopPreview();
+    setState(() {
+      _step = _EkycStep.idImages;
+      _submitState = _SubmitState.idle;
+      _error = null;
+      _cameraPhase = EkycCameraPhase.idle;
+      _cameraBusy = false;
+    });
   }
 
   @override
@@ -201,51 +240,51 @@ class _IdentityVerificationScreenState
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Xác thực danh tính eKYC',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Để đảm bảo an toàn cho cộng đồng, xác thực qua ảnh CCCD và quét khuôn mặt (FPT.AI).',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            kycStatusLabel(_status),
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w500),
-          ),
-          if (_adminNote != null && _adminNote!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.amber.shade200),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Xác thực danh tính eKYC',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Lần xác thực trước chưa đạt',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+              const SizedBox(height: 12),
+              Text(
+                'Để đảm bảo an toàn cho cộng đồng, xác thực qua ảnh CCCD và quét khuôn mặt (FPT.AI).',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 13, height: 1.45),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                kycStatusLabel(_status),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+              ),
+              if (_adminNote != null && _adminNote!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.shade200),
                   ),
-                  const SizedBox(height: 4),
-                  Text(_adminNote!, style: TextStyle(color: Colors.amber.shade900, fontSize: 13)),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 24),
-          if (_step == _EkycStep.idImages) _buildStep1() else _buildStep2(),
-        ],
-      ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Lần xác thực trước chưa đạt',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(_adminNote!, style: TextStyle(color: Colors.amber.shade900, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              if (_step == _EkycStep.idImages) _buildStep1() else _buildStep2(),
+            ],
+          ),
     );
   }
 
@@ -253,38 +292,51 @@ class _IdentityVerificationScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('Bước 1: Ảnh CCCD', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-        const SizedBox(height: 8),
-        Text(
-          'Tải ảnh mặt trước và mặt sau CCCD rõ nét (JPG/PNG, tối đa 5MB). Ảnh mặt trước cần thấy rõ ảnh chân dung trên thẻ.',
-          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+        const Text(
+          'Bước 1: Tải ảnh CCCD / CMND',
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _pickId(true),
-                icon: const Icon(Icons.credit_card),
-                label: Text(_frontPath != null ? 'Mặt trước ✓' : 'Mặt trước'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _pickId(false),
-                icon: const Icon(Icons.credit_card_outlined),
-                label: Text(_backPath != null ? 'Mặt sau ✓' : 'Mặt sau'),
-              ),
-            ),
-          ],
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blue.shade100),
+          ),
+          child: Text(
+            'Vui lòng tải ảnh mặt trước và mặt sau CCCD/CMND — rõ nét, không lóa/cắt góc. '
+            'Ảnh mặt trước cần thấy rõ ảnh chân dung trên thẻ.',
+            style: TextStyle(color: Colors.blue.shade900, fontSize: 13, height: 1.45),
+          ),
         ),
         const SizedBox(height: 16),
+        EkycIdUploadCard(
+          label: 'Mặt trước CCCD',
+          imagePath: _frontPath,
+          onPick: () => _pickId(true),
+          onClear: _clearFront,
+        ),
+        const SizedBox(height: 12),
+        EkycIdUploadCard(
+          label: 'Mặt sau CCCD',
+          imagePath: _backPath,
+          onPick: () => _pickId(false),
+          onClear: _clearBack,
+        ),
+        const SizedBox(height: 20),
         FilledButton(
           onPressed: _frontPath != null && _backPath != null
-              ? () => setState(() => _step = _EkycStep.faceVideo)
+              ? () => setState(() {
+                    _step = _EkycStep.faceVideo;
+                    _submitState = _SubmitState.idle;
+                    _error = null;
+                  })
               : null,
-          style: FilledButton.styleFrom(backgroundColor: SacoColors.sacoOrange),
+          style: FilledButton.styleFrom(
+            backgroundColor: SacoColors.sacoOrange,
+            minimumSize: const Size.fromHeight(48),
+          ),
           child: const Text('Tiếp tục bước 2'),
         ),
       ],
@@ -299,12 +351,12 @@ class _IdentityVerificationScreenState
           'Bước 2: Quét khuôn mặt',
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Text(
-          'Quay video khuôn mặt khoảng 6 giây. Hệ thống sẽ so khớp với ảnh trên CCCD qua FPT.AI — không cần chờ admin duyệt.',
-          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+          'Bật camera ngay trong app — hệ thống tự quay đúng 6 giây rồi gửi lên FPT.AI so khớp với ảnh CCCD.',
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 13, height: 1.45),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         if (_submitState == _SubmitState.success) ...[
           Container(
             padding: const EdgeInsets.all(24),
@@ -340,11 +392,70 @@ class _IdentityVerificationScreenState
             child: const Text('Hoàn tất xác thực'),
           ),
         ] else ...[
-          OutlinedButton.icon(
-            onPressed: _submitting ? null : _pickVideo,
-            icon: const Icon(Icons.videocam),
-            label: Text(_videoPath != null ? 'Video đã chọn ✓' : 'Quay video 6 giây'),
+          EkycLivenessCamera(
+            key: _cameraKey,
+            disabled: _submitting,
+            recordSeconds: 6,
+            previewHeightFactor: 0.50,
+            onPhaseChanged: _syncCameraUi,
+            onVideoRecorded: _onVideoRecorded,
+            onError: (msg) {
+              setState(() {
+                _submitState = _SubmitState.error;
+                _error = msg;
+              });
+            },
           ),
+          const SizedBox(height: 28),
+          if (_cameraPhase == EkycCameraPhase.idle) ...[
+            FilledButton.icon(
+              onPressed: (_submitting || _cameraBusy)
+                  ? null
+                  : () async {
+                      await _cameraKey.currentState?.startPreview();
+                      _syncCameraUi();
+                    },
+              icon: const Icon(Icons.camera_alt),
+              label: const Text('Bắt đầu quét khuôn mặt'),
+              style: FilledButton.styleFrom(
+                backgroundColor: SacoColors.sacoOrange,
+                minimumSize: const Size.fromHeight(48),
+              ),
+            ),
+          ] else if (_cameraPhase == EkycCameraPhase.preview) ...[
+            FilledButton.icon(
+              onPressed: (_submitting || _cameraBusy)
+                  ? null
+                  : () async {
+                      await _cameraKey.currentState?.recordVideo();
+                      _syncCameraUi();
+                    },
+              icon: const Icon(Icons.fiber_manual_record),
+              label: const Text('Quét ngay (6 giây)'),
+              style: FilledButton.styleFrom(
+                backgroundColor: SacoColors.sacoOrange,
+                minimumSize: const Size.fromHeight(48),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: _cameraBusy
+                  ? null
+                  : () async {
+                      await _cameraKey.currentState?.stopPreview();
+                      _syncCameraUi();
+                    },
+              child: const Text('Hủy camera'),
+            ),
+          ] else if (_cameraPhase == EkycCameraPhase.recording) ...[
+            const LinearProgressIndicator(),
+            const SizedBox(height: 8),
+            const Text(
+              'Đang quay video…',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13),
+            ),
+          ],
           if (_submitState == _SubmitState.submitting) ...[
             const SizedBox(height: 16),
             const LinearProgressIndicator(),
@@ -358,28 +469,20 @@ class _IdentityVerificationScreenState
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(_error!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
+            if (_submitState == _SubmitState.error) ...[
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: _submitting ? null : _retryScan,
+                child: const Text('Thử quét lại'),
+              ),
+            ],
           ],
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: (_submitting || _videoPath == null) ? null : _submit,
-            style: FilledButton.styleFrom(
-              backgroundColor: SacoColors.sacoOrange,
-              minimumSize: const Size.fromHeight(48),
-            ),
-            child: Text(_submitting ? 'Đang gửi…' : 'Gửi xác minh'),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: _submitting ? null : _backToStep1,
+            child: const Text('Quay lại bước 1'),
           ),
         ],
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: _submitting
-              ? null
-              : () => setState(() {
-                    _step = _EkycStep.idImages;
-                    _submitState = _SubmitState.idle;
-                    _error = null;
-                  }),
-          child: const Text('Quay lại bước 1'),
-        ),
       ],
     );
   }

@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 class ApiException implements Exception {
   ApiException({
     required this.message,
@@ -16,6 +18,35 @@ class ApiException implements Exception {
 String getApiErrorMessage(dynamic error) {
   if (error is ApiException) return error.message;
   return 'Đã có lỗi xảy ra. Vui lòng thử lại sau.';
+}
+
+/// Trích message từ phản hồi lỗi Dio (400/401/…) — giống web `getApiErrorMessage`.
+String? extractDioErrorMessage(DioException e) {
+  final data = e.response?.data;
+  if (data is String && data.trim().isNotEmpty) return data.trim();
+  if (data is Map) {
+    final map = Map<String, dynamic>.from(data);
+    for (final key in ['message', 'Message', 'detail', 'title']) {
+      final v = map[key];
+      if (v != null && v.toString().trim().isNotEmpty) {
+        return v.toString().trim();
+      }
+    }
+  }
+  if (data is List) {
+    final parts = data
+        .map((item) {
+          if (item is Map) {
+            final desc = item['description'] ?? item['message'];
+            return desc?.toString().trim() ?? '';
+          }
+          return '';
+        })
+        .where((s) => s.isNotEmpty)
+        .join(', ');
+    if (parts.isNotEmpty) return parts;
+  }
+  return null;
 }
 
 ({String message, bool isBanned}) loginErrorFromApi({
