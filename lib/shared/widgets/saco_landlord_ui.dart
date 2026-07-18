@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../config/theme.dart';
+import '../../core/design/design_system.dart';
+import 'app_ui.dart';
 
 /// Wraps wide content (tables, stat rows) with horizontal swipe on mobile.
 class SacoHorizontalScroll extends StatelessWidget {
@@ -27,7 +28,7 @@ class SacoHorizontalScroll extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               'Vuốt sang để xem thêm →',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+              style: AppTypography.captionStyle.copyWith(color: AppColors.textTertiary),
               textAlign: TextAlign.right,
             ),
           ),
@@ -58,40 +59,10 @@ class SacoPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    color: SacoColors.sacoBlue,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    subtitle!,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade600,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (trailing != null) trailing!,
-        ],
-      ),
+    return AppSectionHeader(
+      title: title,
+      subtitle: subtitle,
+      trailing: trailing,
     );
   }
 }
@@ -110,39 +81,22 @@ class SacoSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+    return AppCard(
+      margin: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: SacoColors.sacoBlue,
-            ),
-          ),
+          Text(title, style: AppTypography.titleStyle),
           if (subtitle != null) ...[
-            const SizedBox(height: 4),
-            Text(subtitle!, style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+            const SizedBox(height: AppSpacing.xxs),
+            Text(subtitle!, style: AppTypography.captionStyle),
           ],
-          const SizedBox(height: 12),
-          Divider(color: Colors.grey.shade200, height: 1),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.md),
+          const Divider(height: 1),
+          const SizedBox(height: AppSpacing.md),
           child,
         ],
       ),
@@ -165,11 +119,14 @@ class SacoPillTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(6),
+      margin: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      padding: const EdgeInsets.all(AppSpacing.xs),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.surfaceMuted,
+        borderRadius: AppRadius.mdAll,
       ),
       child: SacoHorizontalScroll(
         showHint: tabs.length > 3,
@@ -180,20 +137,29 @@ class SacoPillTabs extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.only(right: 6),
               child: Material(
-                color: selected ? Colors.white : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-                elevation: selected ? 1 : 0,
+                color: selected ? AppColors.surface : Colors.transparent,
+                borderRadius: AppRadius.smAll,
+                elevation: selected ? 0 : 0,
+                shadowColor: Colors.transparent,
                 child: InkWell(
                   onTap: () => onSelected(i),
-                  borderRadius: BorderRadius.circular(10),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  borderRadius: AppRadius.smAll,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm + 2,
+                      vertical: AppSpacing.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected ? AppColors.surface : Colors.transparent,
+                      borderRadius: AppRadius.smAll,
+                      boxShadow: selected ? AppShadows.sm : null,
+                    ),
                     child: Text(
                       tabs[i],
-                      style: TextStyle(
+                      style: AppTypography.captionStyle.copyWith(
                         fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                        fontSize: 13,
-                        color: selected ? SacoColors.sacoBlue : SacoColors.sacoGray,
+                        color: selected ? AppColors.textPrimary : AppColors.textSecondary,
                       ),
                     ),
                   ),
@@ -224,15 +190,16 @@ class SacoGradientBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(22),
+      margin: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.lg + 2),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.lgAll,
         gradient: const LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [Color(0xFF1A1A2E), Color(0xFF3D2C24), Color(0xFF8B5E3C)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.secondary, Color(0xFF2D2D44), Color(0xFF8B5E3C)],
         ),
+        boxShadow: AppShadows.md,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,20 +216,13 @@ class SacoGradientBanner extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             title,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-              height: 1.2,
-            ),
+            style: AppTypography.headlineStyle.copyWith(color: Colors.white),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             subtitle,
-            style: TextStyle(
-              fontSize: 13,
+            style: AppTypography.captionStyle.copyWith(
               color: Colors.white.withValues(alpha: 0.85),
-              height: 1.45,
             ),
           ),
           if (action != null) ...[
@@ -292,42 +252,35 @@ class SacoPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
-    final btn = DecoratedBox(
+    final btn = AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
         gradient: enabled
             ? const LinearGradient(
-                colors: [SacoColors.sacoOrange, SacoColors.sacoOrangeDark],
+                colors: [AppColors.primary, AppColors.primaryDark],
               )
             : null,
-        color: enabled ? null : Colors.grey.shade300,
-        borderRadius: BorderRadius.circular(compact ? 999 : 12),
-        boxShadow: enabled
-            ? [
-                BoxShadow(
-                  color: SacoColors.sacoOrange.withValues(alpha: 0.35),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ]
-            : null,
+        color: enabled ? null : AppColors.border,
+        borderRadius: BorderRadius.circular(compact ? AppRadius.pill : AppRadius.lg),
+        boxShadow: enabled ? AppShadows.primaryGlow(opacity: 0.24) : null,
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(compact ? 999 : 12),
+          borderRadius: BorderRadius.circular(compact ? AppRadius.pill : AppRadius.lg),
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: compact ? 16 : 22,
-              vertical: compact ? 10 : 14,
+              horizontal: compact ? AppSpacing.md : AppSpacing.lg + 2,
+              vertical: compact ? AppSpacing.sm : AppSpacing.sm + 2,
             ),
             child: Center(
               child: Text(
                 label,
-                style: const TextStyle(
+                style: AppTypography.captionStyle.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
-                  fontSize: 14,
                 ),
               ),
             ),
@@ -360,13 +313,9 @@ class SacoFormField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade700,
-          ),
+          style: AppTypography.labelStyle,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.xs),
         child,
       ],
     );
@@ -378,20 +327,23 @@ InputDecoration sacoInputDecoration({String? hintText}) {
     hintText: hintText,
     labelText: null,
     filled: true,
-    fillColor: Colors.white,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    fillColor: AppColors.surface,
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.sm + 2,
+      vertical: AppSpacing.sm + 2,
+    ),
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: Colors.grey.shade300),
+      borderRadius: AppRadius.mdAll,
+      borderSide: const BorderSide(color: AppColors.border),
     ),
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: Colors.grey.shade300),
+      borderRadius: AppRadius.mdAll,
+      borderSide: const BorderSide(color: AppColors.border),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: SacoColors.sacoOrange, width: 1.5),
+      borderRadius: AppRadius.mdAll,
+      borderSide: const BorderSide(color: AppColors.primary, width: 2),
     ),
-    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+    hintStyle: AppTypography.captionStyle.copyWith(color: AppColors.textTertiary),
   );
 }

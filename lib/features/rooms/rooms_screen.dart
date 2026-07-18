@@ -128,29 +128,15 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
                     ),
                   )
                 else
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final crossAxisCount = constraints.maxWidth >= 900
-                          ? 3
-                          : constraints.maxWidth >= 600
-                              ? 2
-                              : 1;
-                      return GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: crossAxisCount,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          childAspectRatio: crossAxisCount == 1 ? 0.82 : 0.72,
-                        ),
-                        itemCount: filtered.length,
-                        itemBuilder: (_, i) => RoomCard(
-                          room: filtered[i],
-                          compact: true,
-                        ),
-                      );
-                    },
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (_, i) => RoomCard(
+                      room: filtered[i],
+                      compact: true,
+                    ),
                   ),
                 const SacoFooter(),
               ],

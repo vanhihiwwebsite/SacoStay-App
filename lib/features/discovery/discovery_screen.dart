@@ -621,6 +621,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         if (_showProfile && _current != null)
           _ProfileSheet(
             card: _current!,
+            isPremium: _quota.isPremium,
             onClose: () => setState(() => _showProfile = false),
             onChat: () {
               final c = _current!;
@@ -811,11 +812,13 @@ class _BottomNavButton extends StatelessWidget {
 class _ProfileSheet extends StatelessWidget {
   const _ProfileSheet({
     required this.card,
+    required this.isPremium,
     required this.onClose,
     required this.onChat,
   });
 
   final DiscoveryCard card;
+  final bool isPremium;
   final VoidCallback onClose;
   final VoidCallback onChat;
 
@@ -874,10 +877,19 @@ class _ProfileSheet extends StatelessWidget {
                     Text(card.bio!, style: TextStyle(color: Colors.grey.shade700)),
                   ],
                   const SizedBox(height: 16),
-                  OutlinedButton(
-                    onPressed: () => context.go('/tenant-pricing'),
-                    child: const Text('Nâng cấp Premium'),
-                  ),
+                  if (isPremium)
+                    OutlinedButton(
+                      onPressed: () {
+                        onClose();
+                        context.push('/profile/${card.userId}');
+                      },
+                      child: const Text('Xem chi tiết hồ sơ'),
+                    )
+                  else
+                    OutlinedButton(
+                      onPressed: () => context.go('/tenant-pricing'),
+                      child: const Text('Nâng cấp Premium'),
+                    ),
                   const SizedBox(height: 8),
                   FilledButton(
                     onPressed: onChat,

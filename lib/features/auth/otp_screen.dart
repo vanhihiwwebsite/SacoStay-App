@@ -64,12 +64,9 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
         }
       }
       _snack('Xác thực thành công!');
-      context.go(
-        Uri(
-          path: '/identity-verification',
-          queryParameters: {'returnUrl': returnUrl},
-        ).toString(),
-      );
+      await ref.read(userPrefsProvider).clearAuthReturnUrl();
+      if (!mounted) return;
+      context.go(returnUrl);
     } on ApiException catch (e) {
       _snack(e.message, isError: true);
     } catch (e) {

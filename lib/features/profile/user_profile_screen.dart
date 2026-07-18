@@ -12,6 +12,7 @@ import '../../models/tenant_room_profile.dart';
 import '../../repositories/lifestyle_repository.dart';
 import '../../repositories/tenant_room_repository.dart';
 import '../../shared/widgets/profile_photos_modal.dart';
+import '../../shared/widgets/report_modal.dart';
 import '../discovery/widgets/tenant_room_details_view.dart';
 
 class UserProfileScreen extends ConsumerStatefulWidget {
@@ -208,6 +209,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   }
 
   Widget _profileCard(BuildContext context, {required bool isLandlord}) {
+    final targetUserId = userIdFromUser(_user) ?? widget.userId ?? '';
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -222,28 +225,49 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           ),
         ],
       ),
-      child: Column(
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              CircleAvatar(radius: 56, backgroundImage: NetworkImage(_avatarUrl)),
-              if (isVerifiedUser(_user))
-                Positioned(
-                  right: 4,
-                  bottom: 4,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade500,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                    child: const Icon(Icons.check, size: 16, color: Colors.white),
-                  ),
+          if (!_isOwn && targetUserId.isNotEmpty)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                onPressed: () => showReportModal(
+                  context,
+                  type: ReportTargetType.user,
+                  targetName: _displayName,
+                  reportedUserId: targetUserId,
                 ),
-            ],
-          ),
+                icon: Icon(Icons.flag_outlined, size: 20, color: Colors.red.shade400),
+                tooltip: 'Báo cáo',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+            ),
+          Column(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  CircleAvatar(radius: 56, backgroundImage: NetworkImage(_avatarUrl)),
+                  if (isVerifiedUser(_user))
+                    Positioned(
+                      right: 4,
+                      bottom: 4,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade500,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(Icons.check, size: 16, color: Colors.white),
+                      ),
+                    ),
+                ],
+              ),
           const SizedBox(height: 12),
           Text(
             _displayName,
@@ -335,6 +359,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               ],
             ),
           ],
+            ],
+          ),
         ],
       ),
     );

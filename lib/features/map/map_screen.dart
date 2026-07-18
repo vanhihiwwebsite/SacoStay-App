@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -93,39 +93,85 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               initialCenter: _mapCity == 'TP.HCM' ? _hcm : _hanoi,
             );
 
-            final overlays = _MapOverlays(
-              searchController: _searchController,
-              filters: _filters,
-              showFilters: _showFilters,
-              filteredCount: filtered.length,
-              onMapCount: onMap.length,
-              minPriceM: minPrice != null ? (minPrice / 1000000).toStringAsFixed(1) : null,
-              onSearchChanged: () => setState(() {}),
-              onToggleFilters: () => setState(() => _showFilters = !_showFilters),
-              onFiltersChanged: (f) => setState(() {
-                _filters = f.copy();
-                if (f.city == 'Hà Nội' || f.city == 'TP.HCM') {
-                  _centerOnCity(f.city);
-                }
-              }),
-              onCloseFilters: () => setState(() => _showFilters = false),
-              onCityQuick: (city) {
-                setState(() {
-                  _filters.city = city;
-                  _filters.district = 'all';
-                });
-                _centerOnCity(city);
-              },
-            );
+            Widget buildMapStack({required bool showListButton, List<Widget> extra = const []}) {
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  Positioned.fill(child: mapArea),
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    right: 12,
+                    child: _MapSearchBar(
+                      searchController: _searchController,
+                      filters: _filters,
+                      onSearchChanged: () => setState(() {}),
+                      onToggleFilters: () => setState(() => _showFilters = !_showFilters),
+                      onCityQuick: (city) {
+                        setState(() {
+                          _filters.city = city;
+                          _filters.district = 'all';
+                        });
+                        _centerOnCity(city);
+                      },
+                    ),
+                  ),
+                  if (!_showFilters)
+                    Positioned(
+                      bottom: 16,
+                      left: 12,
+                      right: 12,
+                      child: _MapStatsBar(
+                        filteredCount: filtered.length,
+                        minPriceM: minPrice != null
+                            ? (minPrice / 1000000).toStringAsFixed(1)
+                            : null,
+                        showListButton: showListButton,
+                        onOpenList: () => setState(() => _showMobileList = true),
+                      ),
+                    ),
+                  if (_showFilters)
+                    Positioned.fill(
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        child: Align(
+                          alignment: Alignment.center,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: 420,
+                                maxHeight: MediaQuery.of(context).size.height * 0.82,
+                              ),
+                              child: RoomFiltersPanel(
+                                scrollable: true,
+                                filters: _filters,
+                                resultCount: filtered.length,
+                                onChanged: (f) => setState(() {
+                                  _filters = f.copy();
+                                  if (f.city == 'Hà Nội' || f.city == 'TP.HCM') {
+                                    _centerOnCity(f.city);
+                                  }
+                                }),
+                                onClose: () => setState(() => _showFilters = false),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ...extra,
+                ],
+              );
+            }
 
             if (isWide) {
               return Row(
                 children: [
                   Expanded(
-                    child: Stack(
-                      children: [
-                        mapArea,
-                        overlays,
+                    child: buildMapStack(
+                      showListButton: false,
+                      extra: [
                         if (_selectedRoom != null)
                           Positioned(
                             left: 0,
@@ -154,24 +200,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               );
             }
 
-            return Stack(
-              children: [
-                mapArea,
-                overlays,
-                if (!isWide)
-                  Positioned(
-                    bottom: 96,
-                    right: 12,
-                    child: FilledButton(
-                      onPressed: () => setState(() => _showMobileList = true),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.grey.shade800,
-                        elevation: 4,
-                      ),
-                      child: Text('Danh sách (${filtered.length})'),
-                    ),
-                  ),
+            return buildMapStack(
+              showListButton: true,
+              extra: [
                 if (_selectedRoom != null && !_showMobileList)
                   Positioned(
                     left: 0,
@@ -184,16 +215,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       ),
                     ),
                   ),
-                if (_showMobileList && !isWide)
-                  _MobileListSheet(
-                    rooms: filtered,
-                    selectedRoom: _selectedRoom,
-                    onClose: () => setState(() => _showMobileList = false),
-                    onSelect: (room) => _selectRoom(room, collapseList: true),
-                    onDetail: (id) {
-                      setState(() => _showMobileList = false);
-                      context.push('/rooms/$id');
-                    },
+                if (_showMobileList)
+                  Positioned.fill(
+                    child: _MobileListSheet(
+                      rooms: filtered,
+                      selectedRoom: _selectedRoom,
+                      onClose: () => setState(() => _showMobileList = false),
+                      onSelect: (room) => _selectRoom(room, collapseList: true),
+                      onDetail: (id) {
+                        setState(() => _showMobileList = false);
+                        context.push('/rooms/$id');
+                      },
+                    ),
                   ),
               ],
             );
@@ -228,6 +261,11 @@ class _MapArea extends StatelessWidget {
       options: MapOptions(
         initialCenter: initialCenter,
         initialZoom: 12,
+        minZoom: 5,
+        maxZoom: 18,
+        interactionOptions: const InteractionOptions(
+          flags: InteractiveFlag.all,
+        ),
         onTap: (_, __) => onClearSelection(),
       ),
       children: [
@@ -258,137 +296,54 @@ class _MapArea extends StatelessWidget {
   }
 }
 
-class _MapOverlays extends StatelessWidget {
-  const _MapOverlays({
+class _MapSearchBar extends StatelessWidget {
+  const _MapSearchBar({
     required this.searchController,
     required this.filters,
-    required this.showFilters,
-    required this.filteredCount,
-    required this.onMapCount,
-    required this.minPriceM,
     required this.onSearchChanged,
     required this.onToggleFilters,
-    required this.onFiltersChanged,
-    required this.onCloseFilters,
     required this.onCityQuick,
   });
 
   final TextEditingController searchController;
   final RoomListFilters filters;
-  final bool showFilters;
-  final int filteredCount;
-  final int onMapCount;
-  final String? minPriceM;
   final VoidCallback onSearchChanged;
   final VoidCallback onToggleFilters;
-  final ValueChanged<RoomListFilters> onFiltersChanged;
-  final VoidCallback onCloseFilters;
   final ValueChanged<String> onCityQuick;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Positioned(
-          top: 12,
-          left: 12,
-          right: 12,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(12),
-                clipBehavior: Clip.antiAlias,
-                child: TextField(
-                  controller: searchController,
-                  onChanged: (_) => onSearchChanged(),
-                  decoration: InputDecoration(
-                    hintText: 'Tìm phòng, quận, tiện ích...',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: IconButton(
-                      onPressed: onToggleFilters,
-                      icon: const Icon(Icons.tune),
-                    ),
-                    border: InputBorder.none,
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
+        Material(
+          elevation: 4,
+          borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          child: TextField(
+            controller: searchController,
+            onChanged: (_) => onSearchChanged(),
+            decoration: InputDecoration(
+              hintText: 'Tìm phòng, quận, tiện ích...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: IconButton(
+                onPressed: onToggleFilters,
+                icon: const Icon(Icons.tune),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _cityButton('Hà Nội', filters.city == 'Hà Nội', () => onCityQuick('Hà Nội')),
-                  const SizedBox(width: 8),
-                  _cityButton('TP.HCM', filters.city == 'TP.HCM', () => onCityQuick('TP.HCM')),
-                ],
-              ),
-            ],
+              border: InputBorder.none,
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            ),
           ),
         ),
-        if (showFilters)
-          Positioned.fill(
-            child: Material(
-              color: Colors.black.withValues(alpha: 0.35),
-              child: Align(
-                alignment: Alignment.center,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: 420,
-                      maxHeight: MediaQuery.of(context).size.height * 0.82,
-                    ),
-                    child: RoomFiltersPanel(
-                      scrollable: true,
-                      filters: filters,
-                      resultCount: filteredCount,
-                      onChanged: onFiltersChanged,
-                      onClose: onCloseFilters,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        Positioned(
-          bottom: 16,
-          left: 12,
-          right: 12,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(12),
-            color: Colors.white.withValues(alpha: 0.95),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text('Tìm thấy', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                  Text(
-                    '$filteredCount phòng',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: SacoColors.sacoOrange,
-                      fontSize: 12,
-                    ),
-                  ),
-                  Text('|', style: TextStyle(color: Colors.grey.shade300)),
-                  Text('Trên bản đồ', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                  Text('$onMapCount', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  if (minPriceM != null) ...[
-                    Text('|', style: TextStyle(color: Colors.grey.shade300)),
-                    Text('Từ', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                    Text('${minPriceM}tr', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
-                ],
-              ),
-            ),
-          ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _cityButton('Hà Nội', filters.city == 'Hà Nội', () => onCityQuick('Hà Nội')),
+            const SizedBox(width: 8),
+            _cityButton('TP.HCM', filters.city == 'TP.HCM', () => onCityQuick('TP.HCM')),
+          ],
         ),
       ],
     );
@@ -412,6 +367,88 @@ class _MapOverlays extends StatelessWidget {
               color: selected ? Colors.white : Colors.grey.shade700,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MapStatsBar extends StatelessWidget {
+  const _MapStatsBar({
+    required this.filteredCount,
+    required this.minPriceM,
+    this.showListButton = false,
+    this.onOpenList,
+  });
+
+  final int filteredCount;
+  final String? minPriceM;
+  final bool showListButton;
+  final VoidCallback? onOpenList;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(12),
+      color: Colors.white.withValues(alpha: 0.95),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text('Tìm thấy', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                  Text(
+                    '$filteredCount phòng',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: SacoColors.sacoOrange,
+                      fontSize: 12,
+                    ),
+                  ),
+                  if (minPriceM != null) ...[
+                    Text('|', style: TextStyle(color: Colors.grey.shade300)),
+                    Text('Từ', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                    Text('${minPriceM}tr', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  ],
+                ],
+              ),
+            ),
+            if (showListButton && onOpenList != null) ...[
+              const SizedBox(width: 8),
+              Material(
+                color: SacoColors.sacoOrange,
+                borderRadius: BorderRadius.circular(8),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: onOpenList,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.list_alt, size: 16, color: Colors.white),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Danh sách ($filteredCount)',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -669,3 +706,4 @@ class _MobileListSheet extends StatelessWidget {
     );
   }
 }
+

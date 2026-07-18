@@ -266,6 +266,24 @@ class AuthRepository {
     await _userPrefs.clearPendingRole();
   }
 
+  /// Lấy SĐT chủ trọ — BE trả `PhoneNumber` tại GET /Auth/user/{id} khi user có role landlord.
+  Future<String?> fetchLandlordContactPhone(String userId) async {
+    if (userId.isEmpty) return null;
+    try {
+      final response = await _dio.get<dynamic>(
+        '/Auth/user/${Uri.encodeComponent(userId)}',
+      );
+      if (response.data is! Map) return null;
+      final data = Map<String, dynamic>.from(response.data as Map);
+      final phone = strField(
+        pickField(data, 'phoneNumber', ['PhoneNumber', 'phone', 'Phone']),
+      );
+      return phone.isNotEmpty ? phone : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> clearSession() async {
     await _tokenStorage.delete();
     await _userPrefs.clearSessionKeys();

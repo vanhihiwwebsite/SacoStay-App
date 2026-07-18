@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/theme.dart';
+import '../../core/design/design_system.dart';
+import '../../shared/widgets/app_ui.dart';
 import '../../shared/widgets/saco_logo.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/utils/auth_navigation.dart';
@@ -233,7 +235,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               ),
             ),
             SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm + 4,
+              ),
               child: Column(
                 children: [
                   Align(
@@ -243,23 +248,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       onTap: () => context.go('/'),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
+                  const SizedBox(height: AppSpacing.md),
+                  ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 480),
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.orange.shade50),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
+                    child: AppCard(
+                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    showShadow: true,
+                    borderColor: AppColors.borderAccent.withValues(alpha: 0.6),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -268,21 +263,17 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                               ? 'Chào mừng trở lại!'
                               : 'Tạo tài khoản mới',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: SacoColors.sacoBlue,
-                          ),
+                          style: AppTypography.headlineStyle,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpacing.xs),
                         Text(
                           _mode == AuthMode.login
                               ? 'Đăng nhập để tiếp tục tìm kiếm bạn ở ghép'
                               : 'Tham gia cộng đồng SacoStay ngay hôm nay',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: SacoColors.sacoGray),
+                          style: AppTypography.bodyStyle,
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: AppSpacing.xl),
                         if (_mode == AuthMode.login) ...[
                           if (_requiresLandlordAuth)
                             Container(
@@ -529,6 +520,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       ],
                     ),
                   ),
+                  ),
                 ],
               ),
             ),
@@ -556,14 +548,15 @@ class _RoleChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(12),
+      borderRadius: AppRadius.lgAll,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(AppSpacing.sm),
         decoration: BoxDecoration(
-          color: selected ? SacoColors.sacoOrange.withValues(alpha: 0.08) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: selected ? AppColors.primaryLight.withValues(alpha: 0.45) : AppColors.surface,
+          borderRadius: AppRadius.lgAll,
           border: Border.all(
-            color: selected ? SacoColors.sacoOrange : Colors.grey.shade200,
+            color: selected ? AppColors.primary : AppColors.border,
             width: selected ? 2 : 1,
           ),
         ),
@@ -571,21 +564,23 @@ class _RoleChip extends StatelessWidget {
           children: [
             Icon(
               label.contains('Chủ') ? Icons.home_outlined : Icons.people_outline,
-              color: selected ? SacoColors.sacoOrange : SacoColors.sacoGray,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpacing.xs - 2),
             Text(
               label,
-              style: TextStyle(
+              style: AppTypography.captionStyle.copyWith(
                 fontWeight: FontWeight.w700,
-                color: selected ? SacoColors.sacoOrange : SacoColors.sacoBlue,
-                fontSize: 12,
+                color: selected ? AppColors.primary : AppColors.textPrimary,
               ),
             ),
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 10, color: SacoColors.sacoGray),
+              style: AppTypography.captionStyle.copyWith(
+                fontSize: 10,
+                color: AppColors.textTertiary,
+              ),
             ),
           ],
         ),

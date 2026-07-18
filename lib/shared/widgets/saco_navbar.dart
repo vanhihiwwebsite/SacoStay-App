@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/brand_assets.dart';
 import '../../config/theme.dart';
+import '../../core/design/design_system.dart';
 import '../../core/utils/auth_navigation.dart';
 import '../../core/utils/user_display.dart';
 import '../../features/auth/auth_provider.dart';
@@ -78,18 +79,22 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
     final showPostBtn = _showPostListingBtn(isLoggedIn, role, currentPath);
 
     return Material(
-      color: Colors.white.withValues(alpha: 0.95),
+      color: AppColors.surface.withValues(alpha: 0.96),
       elevation: 0,
       child: Container(
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: Colors.orange.shade100)),
+          border: const Border(bottom: BorderSide(color: AppColors.borderAccent)),
+          boxShadow: AppShadows.sm,
         ),
         child: SafeArea(
           bottom: false,
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm + 4,
+                  vertical: AppSpacing.xs,
+                ),
                 child: Row(
                   children: [
                     SacoLogo(
@@ -394,32 +399,35 @@ class _DesktopNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          border: isActive
-              ? const Border(
-                  bottom: BorderSide(color: SacoColors.sacoOrange, width: 2),
-                )
-              : null,
-        ),
-        child: Row(
-          children: [
-            if (link.iconAsset != null)
-              Image.asset(link.iconAsset!, width: 16, height: 16),
-            if (link.iconAsset != null) const SizedBox(width: 6),
-            Text(
-              link.name,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: isActive ? SacoColors.sacoBlue : SacoColors.sacoGray,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadius.smAll,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.primaryLight.withValues(alpha: 0.35) : Colors.transparent,
+            borderRadius: AppRadius.smAll,
+          ),
+          child: Row(
+            children: [
+              if (link.iconAsset != null)
+                Image.asset(link.iconAsset!, width: 16, height: 16),
+              if (link.iconAsset != null) const SizedBox(width: AppSpacing.xs - 2),
+              Text(
+                link.name,
+                style: AppTypography.captionStyle.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: isActive ? AppColors.textPrimary : AppColors.textSecondary,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

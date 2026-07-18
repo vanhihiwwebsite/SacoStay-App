@@ -51,7 +51,15 @@ class _IdentityVerificationScreenState
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadStatus());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = ref.read(authControllerProvider);
+      if (!auth.isLoggedIn) {
+        if (mounted) context.go('/login?returnUrl=/profile-setup');
+        return;
+      }
+      // FPT.AI eKYC discontinued — skip verification, keep returnUrl flow.
+      _continueAfterVerification();
+    });
   }
 
   Future<void> _loadStatus() async {

@@ -53,5 +53,13 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
-    - image/
-    - image/Icon/
+    - image/logoSacoStay đen.png
+    - image/ảnh web logo SacoStay trắng.png
+    - image/Background_Image_2.png
+    - image/Icon/Discovery.png
+    - image/Icon/Rooms.png
+    - image/Icon/maps.png
+    - image/Icon/Chat.png
+    - image/Icon/Tenant-pricing.png
+    - image/Icon/Login_icon.png
+    - image/Icon/Register_icon.png

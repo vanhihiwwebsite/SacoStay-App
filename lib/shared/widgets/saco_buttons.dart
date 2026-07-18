@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../config/theme.dart';
+import '../../core/design/design_system.dart';
 
 class SacoPrimaryButton extends StatelessWidget {
   const SacoPrimaryButton({
@@ -18,16 +18,22 @@ class SacoPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
       width: double.infinity,
-      child: ElevatedButton(
+      decoration: BoxDecoration(
+        borderRadius: AppRadius.lgAll,
+        boxShadow: (enabled && !loading) ? AppShadows.primaryGlow(opacity: 0.22) : null,
+      ),
+      child: FilledButton(
         onPressed: (!enabled || loading) ? null : onPressed,
         child: loading
             ? const SizedBox(
                 height: 22,
                 width: 22,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2,
+                  strokeWidth: 2.5,
                   color: Colors.white,
                 ),
               )
@@ -66,20 +72,14 @@ class SacoTextField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF374151),
-          ),
-        ),
-        const SizedBox(height: 6),
+        Text(label, style: AppTypography.labelStyle),
+        const SizedBox(height: AppSpacing.xs),
         TextField(
           controller: controller,
           obscureText: obscureText,
           keyboardType: keyboardType,
           autocorrect: autocorrect,
+          style: AppTypography.bodyStyle.copyWith(color: AppColors.textPrimary),
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: prefixIcon,
@@ -106,16 +106,13 @@ class SacoOutlinedButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: SacoColors.sacoBlue,
-        side: BorderSide(color: Colors.orange.shade100),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      icon: icon != null ? Icon(icon, size: 18) : const SizedBox.shrink(),
-      label: Text(label),
-    );
+    if (icon != null) {
+      return OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+      );
+    }
+    return OutlinedButton(onPressed: onPressed, child: Text(label));
   }
 }

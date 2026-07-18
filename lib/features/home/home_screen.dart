@@ -153,38 +153,52 @@ class _FeatureSection extends StatelessWidget {
             const SizedBox(height: 24),
             LayoutBuilder(
               builder: (context, constraints) {
+                const cards = [
+                  _FeatureCard(
+                    emoji: '🏠',
+                    title: 'Tin đăng đã kiểm duyệt',
+                    body:
+                        'Tin đăng được kiểm duyệt trước khi xuất hiện trên nền tảng nhằm hạn chế thông tin sai lệch.',
+                  ),
+                  _FeatureCard(
+                    emoji: '👤',
+                    title: 'Chủ trọ đã xác minh',
+                    body: 'Chủ trọ được xác minh thông tin nhằm tăng độ tin cậy và minh bạch.',
+                  ),
+                  _FeatureCard(
+                    emoji: '🤝',
+                    title: 'Ghép roommate thông minh',
+                    body: 'Tìm roommate phù hợp dựa trên nhu cầu, sở thích và thói quen sinh hoạt.',
+                  ),
+                  _FeatureCard(
+                    emoji: '🎓',
+                    title: 'Cộng đồng sinh viên',
+                    body: 'Cộng đồng dành riêng cho sinh viên để chia sẻ kinh nghiệm thuê trọ.',
+                  ),
+                ];
+
                 final w = constraints.maxWidth;
                 final crossCount = w >= 900 ? 4 : (w >= 500 ? 2 : 1);
+
+                if (crossCount == 1) {
+                  return Column(
+                    children: [
+                      for (var i = 0; i < cards.length; i++) ...[
+                        cards[i],
+                        if (i < cards.length - 1) const SizedBox(height: 12),
+                      ],
+                    ],
+                  );
+                }
+
                 return GridView.count(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisCount: crossCount,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
-                  childAspectRatio: crossCount == 1 ? 1.6 : 1.1,
-                  children: const [
-                    _FeatureCard(
-                      emoji: '🏠',
-                      title: 'Tin đăng đã kiểm duyệt',
-                      body:
-                          'Tin đăng được kiểm duyệt trước khi xuất hiện trên nền tảng nhằm hạn chế thông tin sai lệch.',
-                    ),
-                    _FeatureCard(
-                      emoji: '👤',
-                      title: 'Chủ trọ đã xác minh',
-                      body: 'Chủ trọ được xác minh thông tin nhằm tăng độ tin cậy và minh bạch.',
-                    ),
-                    _FeatureCard(
-                      emoji: '🤝',
-                      title: 'Ghép roommate thông minh',
-                      body: 'Tìm roommate phù hợp dựa trên nhu cầu, sở thích và thói quen sinh hoạt.',
-                    ),
-                    _FeatureCard(
-                      emoji: '🎓',
-                      title: 'Cộng đồng sinh viên',
-                      body: 'Cộng đồng dành riêng cho sinh viên để chia sẻ kinh nghiệm thuê trọ.',
-                    ),
-                  ],
+                  childAspectRatio: crossCount >= 4 ? 1.05 : 1.25,
+                  children: cards,
                 );
               },
             ),
@@ -608,12 +622,23 @@ class _FeatureCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(emoji, style: const TextStyle(fontSize: 28)),
           const SizedBox(height: 8),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w700, color: SacoColors.sacoBlue)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              color: SacoColors.sacoBlue,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(body, style: const TextStyle(color: SacoColors.sacoGray, fontSize: 13, height: 1.4)),
+          Text(
+            body,
+            style: const TextStyle(color: SacoColors.sacoGray, fontSize: 13, height: 1.4),
+          ),
         ],
       ),
     );

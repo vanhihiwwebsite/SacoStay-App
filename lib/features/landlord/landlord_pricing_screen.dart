@@ -19,34 +19,72 @@ class LandlordPricingScreen extends ConsumerStatefulWidget {
 }
 
 class _LandlordPricingScreenState extends ConsumerState<LandlordPricingScreen> {
+  final _pageController = PageController(viewportFraction: 0.88);
+  int _pageIndex = 0;
   String? _roomPostId;
   bool _loadingPosts = false;
   String? _payingPackage;
   String? _errorMessage;
 
-  static const _tiers = ['BASIC', 'LITE', 'PRO', 'ELITE'];
-  static const _tierColors = [
-    Color(0xFF9CA3AF),
-    Color(0xFF2563EB),
-    Color(0xFFF59E0B),
-    Color(0xFFEF4444),
-  ];
   static const _packages = [
-    PaymentCheckoutPackage.landlordBasic,
-    PaymentCheckoutPackage.landlordLite,
-    PaymentCheckoutPackage.landlordPro,
-    PaymentCheckoutPackage.landlordElite,
-  ];
-
-  static const _rows = <_PricingRow>[
-    _PricingRow('Giá 30 ngày', ['53.000', '295.000', '737.500', '1.475.000'], bold: true),
-    _PricingRow('Nhãn dán nổi bật', ['—', 'MÀU XANH', 'MÀU CAM, IN HOA', 'MÀU ĐỎ, IN HOA'], highlight: true),
-    _PricingRow('Kích thước tin', ['Nhỏ', 'Vừa', 'Lớn', 'Rất lớn']),
-    _PricingRow('Ưu tiên duyệt (30-60 phút)', [false, true, true, true]),
-    _PricingRow('Duy trì thêm 10 ngày tin thường', [false, true, true, true]),
-    _PricingRow('Bộ lọc', [false, true, true, true]),
-    _PricingRow('Đẩy tin', [false, false, true, true]),
-    _PricingRow('Phân tích người xem', [false, true, false, true]),
+    _LandlordPackageCardData(
+      tierLabel: 'BASIC',
+      title: 'GÓI CƠ BẢN',
+      subtitle: 'Gói Cơ Bản',
+      price: '53.000 VND',
+      color: Color(0xFF9CA3AF),
+      package: PaymentCheckoutPackage.landlordBasic,
+      benefits: [
+        'Kích thước tin nhỏ',
+        'Hiển thị trên danh sách & bản đồ',
+        'Thanh toán theo tin đăng',
+      ],
+    ),
+    _LandlordPackageCardData(
+      tierLabel: 'LITE',
+      title: 'GÓI LITE',
+      subtitle: 'Gói Lite',
+      price: '295.000 VND',
+      color: Color(0xFF2563EB),
+      package: PaymentCheckoutPackage.landlordLite,
+      benefits: [
+        'Nhãn dán nổi bật màu xanh',
+        'Kích thước tin vừa',
+        'Ưu tiên duyệt 30–60 phút',
+        'Duy trì thêm 10 ngày tin thường',
+        'Bộ lọc & phân tích người xem',
+      ],
+    ),
+    _LandlordPackageCardData(
+      tierLabel: 'PRO',
+      title: 'GÓI PRO',
+      subtitle: 'Gói Pro',
+      price: '737.500 VND',
+      color: Color(0xFFF59E0B),
+      package: PaymentCheckoutPackage.landlordPro,
+      benefits: [
+        'Nhãn dán màu cam, in hoa',
+        'Kích thước tin lớn',
+        'Ưu tiên duyệt 30–60 phút',
+        'Đẩy tin nổi bật',
+        'Bộ lọc nâng cao',
+      ],
+    ),
+    _LandlordPackageCardData(
+      tierLabel: 'ELITE',
+      title: 'GÓI ELITE',
+      subtitle: 'Gói Elite',
+      price: '1.475.000 VND',
+      color: Color(0xFFEF4444),
+      package: PaymentCheckoutPackage.landlordElite,
+      benefits: [
+        'Nhãn dán màu đỏ, in hoa',
+        'Kích thước tin rất lớn',
+        'Ưu tiên duyệt 30–60 phút',
+        'Đẩy tin & phân tích người xem',
+        'Hiển thị nổi bật nhất trên bản đồ',
+      ],
+    ),
   ];
 
   @override
@@ -56,6 +94,12 @@ class _LandlordPricingScreenState extends ConsumerState<LandlordPricingScreen> {
     if (_roomPostId == null || _roomPostId!.isEmpty) {
       _resolvePostId();
     }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _resolvePostId() async {
@@ -105,12 +149,14 @@ class _LandlordPricingScreenState extends ConsumerState<LandlordPricingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final enabled = _roomPostId != null && _roomPostId!.isNotEmpty;
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SacoPageHeader(
-            title: 'Bảng giá VIP',
+            title: 'Đăng ký gói thành viên',
             subtitle: _roomPostId != null && _roomPostId!.isNotEmpty
                 ? 'Nâng cấp tin đăng để tiếp cận nhiều người thuê hơn'
                 : 'Chọn gói phù hợp — tin VIP hiển thị nổi bật trên bản đồ & danh sách',
@@ -123,7 +169,7 @@ class _LandlordPricingScreenState extends ConsumerState<LandlordPricingScreen> {
                 style: TextStyle(fontSize: 13, color: Colors.orange.shade700),
               ),
             )
-          else if (_roomPostId == null || _roomPostId!.isEmpty)
+          else if (!enabled)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
@@ -144,52 +190,49 @@ class _LandlordPricingScreenState extends ConsumerState<LandlordPricingScreen> {
                 child: Text(_errorMessage!, style: TextStyle(fontSize: 12, color: Colors.red.shade800)),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              'Thanh toán qua PayOS — hoàn tất trong app rồi xem kết quả.',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 560,
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: _packages.length,
+              onPageChanged: (i) => setState(() => _pageIndex = i),
+              itemBuilder: (_, i) {
+                final pkg = _packages[i];
+                final paying = _payingPackage == pkg.package.label;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: _PackageCarouselCard(
+                    data: pkg,
+                    enabled: enabled,
+                    paying: paying,
+                    onPay: () => _pay(pkg.package),
+                  ),
+                );
+              },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: IntrinsicWidth(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _TierHeaderRow(
-                          tiers: _tiers,
-                          colors: _tierColors,
-                        ),
-                        ..._rows.map((row) => _FeatureRow(row: row, colors: _tierColors)),
-                        _PayRow(
-                          packages: _packages,
-                          colors: _tierColors,
-                          payingPackage: _payingPackage,
-                          enabled: _roomPostId != null && _roomPostId!.isNotEmpty,
-                          onPay: _pay,
-                        ),
-                      ],
-                    ),
-                  ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              _packages.length,
+              (i) => AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                width: _pageIndex == i ? 18 : 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: _pageIndex == i ? SacoColors.sacoOrange : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             child: Text(
-              '(*) Các tin VIP sẽ được ưu tiên kiểm duyệt trong thời gian 30–60 phút.',
+              '(*) Các tin VIP sẽ được ưu tiên kiểm duyệt trong thời gian 30–60 phút. Vuốt ngang để xem các gói khác.',
               style: TextStyle(
                 fontSize: 11,
                 fontStyle: FontStyle.italic,
@@ -204,227 +247,194 @@ class _LandlordPricingScreenState extends ConsumerState<LandlordPricingScreen> {
   }
 }
 
-class _PricingRow {
-  const _PricingRow(this.label, this.cells, {this.bold = false, this.highlight = false});
-
-  final String label;
-  final List<Object> cells;
-  final bool bold;
-  final bool highlight;
-}
-
-class _TierHeaderRow extends StatelessWidget {
-  const _TierHeaderRow({required this.tiers, required this.colors});
-
-  final List<String> tiers;
-  final List<Color> colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const SizedBox(
-          width: 132,
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            child: Text(
-              'Tính năng',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-            ),
-          ),
-        ),
-        for (var i = 0; i < tiers.length; i++)
-          SizedBox(
-            width: 108,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              color: colors[i],
-              alignment: Alignment.center,
-              child: Text(
-                tiers[i],
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _FeatureRow extends StatelessWidget {
-  const _FeatureRow({required this.row, required this.colors});
-
-  final _PricingRow row;
-  final List<Color> colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 132,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Text(
-                row.label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: row.bold ? FontWeight.w700 : FontWeight.w500,
-                  color: SacoColors.sacoBlue,
-                  height: 1.3,
-                ),
-              ),
-            ),
-          ),
-          for (var i = 0; i < row.cells.length; i++)
-            SizedBox(
-              width: 108,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-                decoration: BoxDecoration(
-                  border: Border(left: BorderSide(color: Colors.grey.shade200)),
-                ),
-                alignment: Alignment.center,
-                child: _CellValue(value: row.cells[i], highlight: row.highlight, tierColor: colors[i]),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CellValue extends StatelessWidget {
-  const _CellValue({
-    required this.value,
-    required this.highlight,
-    required this.tierColor,
+class _LandlordPackageCardData {
+  const _LandlordPackageCardData({
+    required this.tierLabel,
+    required this.title,
+    required this.subtitle,
+    required this.price,
+    required this.color,
+    required this.package,
+    required this.benefits,
   });
 
-  final Object value;
-  final bool highlight;
-  final Color tierColor;
-
-  @override
-  Widget build(BuildContext context) {
-    if (value is bool) {
-      return _CheckIcon(enabled: value as bool);
-    }
-    final text = value as String;
-    if (text == '—') {
-      return Icon(Icons.remove, size: 16, color: Colors.grey.shade400);
-    }
-    if (highlight) {
-      return Text(
-        text,
-        textAlign: TextAlign.center,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          color: tierColor,
-          height: 1.2,
-        ),
-      );
-    }
-    return Text(
-      text,
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-        color: text == 'Miễn phí' ? Colors.grey.shade600 : SacoColors.sacoBlue,
-      ),
-    );
-  }
+  final String tierLabel;
+  final String title;
+  final String subtitle;
+  final String price;
+  final Color color;
+  final PaymentCheckoutPackage package;
+  final List<String> benefits;
 }
 
-class _CheckIcon extends StatelessWidget {
-  const _CheckIcon({required this.enabled});
+class _PackageCarouselCard extends StatelessWidget {
+  const _PackageCarouselCard({
+    required this.data,
+    required this.enabled,
+    required this.paying,
+    required this.onPay,
+  });
 
+  final _LandlordPackageCardData data;
   final bool enabled;
+  final bool paying;
+  final VoidCallback onPay;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 22,
-      height: 22,
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: enabled ? const Color(0xFF22C55E) : Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            data.color.withValues(alpha: 0.15),
+            Colors.white,
+          ],
+        ),
+        border: Border.all(color: data.color.withValues(alpha: 0.35), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: data.color.withValues(alpha: 0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: Icon(
-        Icons.check,
-        size: 14,
-        color: enabled ? Colors.white : Colors.grey.shade400,
-      ),
-    );
-  }
-}
-
-class _PayRow extends StatelessWidget {
-  const _PayRow({
-    required this.packages,
-    required this.colors,
-    required this.onPay,
-    required this.enabled,
-    this.payingPackage,
-  });
-
-  final List<PaymentCheckoutPackage> packages;
-  final List<Color> colors;
-  final ValueChanged<PaymentCheckoutPackage> onPay;
-  final bool enabled;
-  final String? payingPackage;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(width: 132),
-          for (var i = 0; i < packages.length; i++)
-            SizedBox(
-              width: 108,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+        child: Column(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: data.color.withValues(alpha: 0.15),
+                border: Border.all(color: data.color, width: 2),
+              ),
+              child: Icon(Icons.workspace_premium, color: data.color, size: 32),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              data.title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: data.color,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  border: Border(left: BorderSide(color: Colors.grey.shade200)),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
                 ),
-                child: FilledButton(
-                  onPressed: !enabled || payingPackage != null
-                      ? null
-                      : () => onPay(packages[i]),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: colors[i],
-                    minimumSize: const Size(88, 34),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            data.subtitle,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: data.color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            data.tierLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: data.color,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  child: Text(
-                    payingPackage == packages[i].label ? 'Đang xử lý…' : 'Thanh toán',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                  ),
+                    const SizedBox(height: 8),
+                    Text(
+                      data.price,
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: data.color,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'CÁC QUYỀN LỢI BAO GỒM',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.grey.shade600,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: data.benefits.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (_, i) => Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: data.color.withValues(alpha: 0.15),
+                              ),
+                              child: Icon(Icons.check, size: 14, color: data.color),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                data.benefits[i],
+                                style: TextStyle(fontSize: 13, color: Colors.grey.shade800, height: 1.35),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-        ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: !enabled || paying ? null : onPay,
+                style: FilledButton.styleFrom(
+                  backgroundColor: data.color,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  paying ? 'Đang xử lý…' : 'Thanh toán ${data.tierLabel}',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,6 +1,3 @@
-import 'lifestyle_display.dart';
-import 'user_display.dart';
-
 const createListingPath = '/create-listing';
 
 const tenantAuthPaths = ['/chat'];
@@ -38,7 +35,7 @@ Map<String, String> landlordPostListingQueryParams() => {
       'role': 'landlord',
     };
 
-/// Paths that require completed eKYC (FPT.AI Approved → `isVerified`).
+/// Paths that previously required completed eKYC.
 const ekycLandlordPaths = [
   '/landlord-profile',
   '/create-listing',
@@ -48,27 +45,12 @@ const ekycLandlordPaths = [
   '/listing-viewers',
 ];
 
-/// Redirect to identity verification when logged-in user is not verified yet.
+/// FPT.AI eKYC discontinued — BE sets IsVerified=true on register; no redirect.
 String? ekycVerificationRedirect({
   required bool loggedIn,
   required Map<String, dynamic>? user,
   required String path,
   String? fullLocation,
 }) {
-  if (!loggedIn || user == null) return null;
-  if (path == '/identity-verification') return null;
-  if (isAdminUser(user) || isVerifiedUser(user)) return null;
-
-  if (path == '/discovery' && !isLandlordUser(user)) {
-    return '/identity-verification?returnUrl=${Uri.encodeComponent('/discovery')}';
-  }
-
-  final needsLandlordEkyc = isLandlordUser(user) &&
-      ekycLandlordPaths.any((p) => path == p || path.startsWith('$p/'));
-  if (needsLandlordEkyc) {
-    final returnUrl = sanitizeReturnUrl(fullLocation) ?? '/landlord-profile';
-    return '/identity-verification?returnUrl=${Uri.encodeComponent(returnUrl)}';
-  }
-
   return null;
 }
