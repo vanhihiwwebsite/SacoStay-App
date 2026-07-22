@@ -107,7 +107,7 @@ abstract final class AppTheme {
           foregroundColor: AppColors.textOnPrimary,
           disabledBackgroundColor: AppColors.border,
           disabledForegroundColor: AppColors.textTertiary,
-          minimumSize: const Size.fromHeight(AppSpacing.buttonHeight),
+          minimumSize: const Size(0, AppSpacing.buttonHeight),
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
           textStyle: textTheme.labelLarge?.copyWith(
@@ -121,7 +121,7 @@ abstract final class AppTheme {
           elevation: 0,
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.textOnPrimary,
-          minimumSize: const Size.fromHeight(AppSpacing.buttonHeight),
+          minimumSize: const Size(0, AppSpacing.buttonHeight),
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
           textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
@@ -130,7 +130,7 @@ abstract final class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.textPrimary,
-          minimumSize: const Size.fromHeight(AppSpacing.buttonHeight),
+          minimumSize: const Size(0, AppSpacing.buttonHeight),
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           side: const BorderSide(color: AppColors.borderAccent, width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),

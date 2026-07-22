@@ -8,6 +8,9 @@ import '../../config/theme.dart';
 import '../../core/utils/room_filters.dart';
 import '../../core/utils/vip_tier.dart';
 import '../../models/room_post.dart';
+import '../../features/auth/auth_provider.dart';
+import '../../shared/widgets/landlord_shell.dart';
+import '../../shared/widgets/tenant_shell.dart';
 import '../rooms/room_providers.dart';
 import '../rooms/widgets/room_filters_panel.dart';
 import 'widgets/house_map_marker.dart';
@@ -75,15 +78,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           applyRoomFilters(allRooms, _filters),
         );
         final onMap = filtered.where((r) => r.hasCoordinates).toList();
-        final minPrice = filtered
-            .map((r) => r.price)
-            .whereType<int>()
-            .where((p) => p > 0)
-            .fold<int?>(null, (min, p) => min == null ? p : (p < min ? p : min));
 
         return LayoutBuilder(
           builder: (context, constraints) {
             final isWide = constraints.maxWidth >= 640;
+            final role = ref.watch(authControllerProvider).userRole;
+            final isTenantMobile = !isWide && role == 'tenant';
+            final isLandlordMobile = !isWide && role == 'landlord';
+            final isMobileShell = isTenantMobile || isLandlordMobile;
+            final statsBarBottom = isMobileShell
+                ? (isLandlordMobile
+                    ? LandlordShell.mapStatsBarBottom(context)
+                    : TenantShell.mapStatsBarBottom(context))
+                : 16.0;
+            final popupBottom = isMobileShell
+                ? statsBarBottom + 56
+                : 88.0;
+            final filterBottomPad = isMobileShell
+                ? (isLandlordMobile
+                        ? LandlordShell.bottomInset(context)
+                        : TenantShell.bottomInset(context)) +
+                    8
+                : 24.0;
             final mapArea = _MapArea(
               controller: _mapController,
               rooms: onMap,
@@ -118,15 +134,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   ),
                   if (!_showFilters)
                     Positioned(
-                      bottom: 16,
+                      bottom: statsBarBottom,
                       left: 12,
                       right: 12,
                       child: _MapStatsBar(
                         filteredCount: filtered.length,
-                        minPriceM: minPrice != null
-                            ? (minPrice / 1000000).toStringAsFixed(1)
-                            : null,
                         showListButton: showListButton,
+                        reserveFabGap: isTenantMobile,
                         onOpenList: () => setState(() => _showMobileList = true),
                       ),
                     ),
@@ -135,13 +149,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       child: Material(
                         color: Colors.black.withValues(alpha: 0.35),
                         child: Align(
-                          alignment: Alignment.center,
+                          alignment: Alignment.bottomCenter,
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                            padding: EdgeInsets.fromLTRB(16, 72, 16, filterBottomPad),
                             child: ConstrainedBox(
                               constraints: BoxConstraints(
                                 maxWidth: 420,
-                                maxHeight: MediaQuery.of(context).size.height * 0.82,
+                                maxHeight: MediaQuery.of(context).size.height * 0.72,
                               ),
                               child: RoomFiltersPanel(
                                 scrollable: true,
@@ -207,7 +221,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   Positioned(
                     left: 0,
                     right: 0,
-                    bottom: 88,
+                    bottom: popupBottom,
                     child: Align(
                       child: MapRoomPopup(
                         room: _selectedRoom!,
@@ -376,14 +390,14 @@ class _MapSearchBar extends StatelessWidget {
 class _MapStatsBar extends StatelessWidget {
   const _MapStatsBar({
     required this.filteredCount,
-    required this.minPriceM,
     this.showListButton = false,
+    this.reserveFabGap = false,
     this.onOpenList,
   });
 
   final int filteredCount;
-  final String? minPriceM;
   final bool showListButton;
+  final bool reserveFabGap;
   final VoidCallback? onOpenList;
 
   @override
@@ -411,16 +425,11 @@ class _MapStatsBar extends StatelessWidget {
                       fontSize: 12,
                     ),
                   ),
-                  if (minPriceM != null) ...[
-                    Text('|', style: TextStyle(color: Colors.grey.shade300)),
-                    Text('Từ', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                    Text('${minPriceM}tr', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
                 ],
               ),
             ),
-            if (showListButton && onOpenList != null) ...[
-              const SizedBox(width: 8),
+            if (reserveFabGap) const SizedBox(width: TenantShell.fabClearanceWidth),
+            if (showListButton && onOpenList != null)
               Material(
                 color: SacoColors.sacoOrange,
                 borderRadius: BorderRadius.circular(8),
@@ -447,7 +456,6 @@ class _MapStatsBar extends StatelessWidget {
                   ),
                 ),
               ),
-            ],
           ],
         ),
       ),
@@ -528,9 +536,9 @@ class _RoomSidebar extends StatelessWidget {
                                   room.title,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: vipTierTitleStyle(room.vipTier).copyWith(
-                                    fontSize: 13,
-                                    color: selected ? Colors.white : null,
+                                  style: _mapRoomListTitleStyle(
+                                    room.vipTier,
+                                    selected: selected,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -660,9 +668,9 @@ class _MobileListSheet extends StatelessWidget {
                                           room.title,
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            color: selected ? Colors.white : SacoColors.sacoBlue,
+                                          style: _mapRoomListTitleStyle(
+                                            room.vipTier,
+                                            selected: selected,
                                           ),
                                         ),
                                         const SizedBox(height: 4),
@@ -707,3 +715,11 @@ class _MobileListSheet extends StatelessWidget {
   }
 }
 
+/// Title color theo gói VIP (giống trang danh sách phòng), giữ cỡ chữ cố định trên bản đồ.
+TextStyle _mapRoomListTitleStyle(VipTier tier, {required bool selected}) {
+  return TextStyle(
+    fontWeight: FontWeight.w600,
+    fontSize: 13,
+    color: selected ? Colors.white : vipTierTitleColor(tier),
+  );
+}

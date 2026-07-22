@@ -39,7 +39,7 @@ class SacoInlineMobileMenu extends ConsumerWidget {
     showSacoNotificationPopup(context, ref);
   }
 
-  String get _profilePath => role == 'landlord' ? '/landlord-profile' : '/profile/me';
+  String get _profilePath => '/profile/me';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

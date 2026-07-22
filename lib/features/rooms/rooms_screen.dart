@@ -7,6 +7,8 @@ import '../../core/utils/room_filters.dart';
 import '../../core/utils/vip_tier.dart';
 import '../../models/room_post.dart';
 import '../../shared/widgets/saco_footer.dart';
+import '../../shared/widgets/landlord_shell.dart';
+import '../../shared/widgets/tenant_shell.dart';
 import 'room_providers.dart';
 import 'widgets/room_card.dart';
 import 'widgets/room_filters_panel.dart';
@@ -138,7 +140,11 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen> {
                       compact: true,
                     ),
                   ),
-                const SacoFooter(),
+                if (MediaQuery.sizeOf(context).width >= 640) const SacoFooter(),
+                if (TenantShell.shouldUse(context, ref))
+                  SizedBox(height: TenantShell.bottomInset(context)),
+                if (LandlordShell.shouldUse(context, ref))
+                  SizedBox(height: LandlordShell.bottomInset(context)),
               ],
             ),
           ),

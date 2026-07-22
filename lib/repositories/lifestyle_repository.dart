@@ -1,7 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/storage/guest_discovery_storage.dart';
+import '../core/storage/lifestyle_storage.dart';
 import '../core/utils/json_normalize.dart';
+import '../core/api/api_exception.dart';
 import '../core/utils/media_url.dart';
 import '../core/utils/discovery_filters.dart';
 import '../core/utils/lifestyle_display.dart';
@@ -10,6 +13,14 @@ import '../features/auth/auth_provider.dart';
 import '../models/lifestyle.dart';
 import '../models/tenant_room_profile.dart';
 import '../repositories/tenant_room_repository.dart';
+
+final lifestyleStorageProvider = FutureProvider<LifestyleStorage>((ref) {
+  return LifestyleStorage.create();
+});
+
+final guestDiscoveryStorageProvider = FutureProvider<GuestDiscoveryStorage>((ref) {
+  return GuestDiscoveryStorage.create();
+});
 
 final lifestyleRepositoryProvider = Provider<LifestyleRepository>((ref) {
   return LifestyleRepository(ref.watch(apiClientProvider).dio);
@@ -24,6 +35,9 @@ class LifestyleRepository {
     try {
       final response = await _dio.get<dynamic>('/Lifestyle/questions');
       final items = _unwrapList(response.data);
+      if (items.isEmpty) {
+        throw ApiException(message: 'Không tải được câu hỏi trắc nghiệm.');
+      }
       final questions = <LifestyleQuestion>[];
       for (final item in items) {
         if (item is! Map) continue;
@@ -45,29 +59,80 @@ class LifestyleRepository {
             }
           }
         }
+        if (content.isEmpty || options.isEmpty) continue;
         questions.add(LifestyleQuestion(id: id, content: content, options: options));
       }
       questions.sort((a, b) => a.id.compareTo(b.id));
       return questions;
+    } on ApiException {
+      rethrow;
+    } on DioException catch (e) {
+      throw ApiException(
+        message: _extractErrorMessage(e) ?? 'Không tải được câu hỏi trắc nghiệm.',
+        statusCode: e.response?.statusCode,
+      );
     } catch (_) {
-      return [];
+      throw ApiException(message: 'Không tải được câu hỏi trắc nghiệm.');
     }
   }
 
   Future<String> submitAnswers(List<int> selectedOptionIds) async {
-    final response = await _dio.post<dynamic>(
-      '/Lifestyle/submit',
-      data: {
-        'selectedOptionIds': selectedOptionIds,
-        'SelectedOptionIds': selectedOptionIds,
-      },
-    );
-  return _messageFromResponse(response.data, 'Lưu trắc nghiệm thành công.');
+    try {
+      final response = await _dio.post<dynamic>(
+        '/Lifestyle/submit',
+        data: {
+          'selectedOptionIds': selectedOptionIds,
+          'SelectedOptionIds': selectedOptionIds,
+        },
+      );
+      return _messageFromResponse(response.data, 'Lưu trắc nghiệm thành công.');
+    } on DioException catch (e) {
+      throw ApiException(
+        message: _extractErrorMessage(e) ?? 'Gửi kết quả trắc nghiệm thất bại.',
+        statusCode: e.response?.statusCode,
+      );
+    }
   }
 
-  Future<bool> hasCompletedQuiz() async {
+  Future<bool> ensureQuizCompleted(String userId) async {
+    if (userId.isEmpty) return false;
+    final storage = await LifestyleStorage.create();
+    if (storage.hasCompletedQuiz(userId)) return true;
+    final answers = await getMyAnswers();
+    if (answers.isNotEmpty) {
+      await storage.setQuizCompleted(userId);
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> hasCompletedQuiz({String? userId}) async {
+    if (userId != null && userId.isNotEmpty) {
+      return ensureQuizCompleted(userId);
+    }
     final answers = await getMyAnswers();
     return answers.isNotEmpty;
+  }
+
+  Future<List<SwipeDeckCard>> getGuestSwipeDeck({
+    required List<int> selectedOptionIds,
+    int limit = 50,
+    bool includeSwiped = true,
+  }) async {
+    if (selectedOptionIds.isEmpty) return [];
+    try {
+      final response = await _dio.get<dynamic>(
+        '/Lifestyle/guest-swipe-deck',
+        queryParameters: {
+          'limit': limit,
+          'selectedOptionIds': selectedOptionIds.join(','),
+          if (includeSwiped) 'includeSwiped': 'true',
+        },
+      );
+      return _normalizeSwipeDeck(response.data);
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<List<UserLifestyleAnswer>> getMyAnswers() async {
@@ -254,15 +319,6 @@ class LifestyleRepository {
     }
   }
 
-  List<dynamic> _unwrapList(dynamic raw) {
-    if (raw is List) return raw;
-    if (raw is! Map) return [];
-    final map = Map<String, dynamic>.from(raw);
-    final nested = pickField(map, 'data', ['items', 'value', r'$values']);
-    if (nested is List) return nested;
-    return [];
-  }
-
   List<SwipeDeckCard> _normalizeSwipeDeck(dynamic raw) {
     return _unwrapList(raw).map((item) {
       if (item is! Map) return null;
@@ -357,6 +413,29 @@ class LifestyleRepository {
             strField(pickField(o, 'optionContent', ['OptionContent'])),
       );
     }).whereType<UserLifestyleAnswer>().toList();
+  }
+
+  List<dynamic> _unwrapList(dynamic raw) {
+    if (raw is List) return raw;
+    if (raw is! Map) return [];
+    final map = Map<String, dynamic>.from(raw);
+    final value = map['value'] ?? map['Value'];
+    if (value is List) return value;
+    final nested = pickField(map, 'data', ['items', r'$values']);
+    if (nested is List) return nested;
+    return [];
+  }
+
+  String? _extractErrorMessage(DioException e) {
+    final data = e.response?.data;
+    if (data is Map) {
+      final msg = strField(
+        pickField(Map<String, dynamic>.from(data), 'message', ['Message', 'title', 'Title']),
+      );
+      if (msg.isNotEmpty) return msg;
+    }
+    if (data is String && data.trim().isNotEmpty) return data.trim();
+    return e.message;
   }
 
   String _messageFromResponse(dynamic raw, String fallback) {

@@ -10,6 +10,7 @@ import '../../core/utils/user_display.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../models/kyc.dart';
 import '../../repositories/kyc_repository.dart';
+import '../../shared/widgets/tenant_sub_page_scaffold.dart';
 
 class ProfileSetupScreen extends ConsumerStatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -65,7 +66,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         _dateOfBirth = DateTime.tryParse(dobRaw.length >= 10 ? dobRaw.substring(0, 10) : dobRaw);
         _gender = genderToFormValue(user['gender'] ?? user['Gender']);
         final job = strField(pickField(user, 'job', ['Job', 'occupation']));
-        if (job.isNotEmpty) _job = job;
+        _job = _normalizeJob(job);
       }
       final kyc = await ref.read(kycRepositoryProvider).getMyStatus();
       setState(() {
@@ -96,7 +97,28 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   String get _pageTitle {
     final user = ref.read(authControllerProvider).user?.raw;
-    return hasBasicProfileFilled(user) ? 'Chỉnh sửa hồ sơ' : 'Tạo hồ sơ của bạn';
+    if (user == null) return 'Tạo hồ sơ của bạn';
+    final hasBio = strField(pickField(user, 'bio', ['Bio'])).isNotEmpty;
+    final hasDob = strField(pickField(user, 'dateOfBirth', ['DateOfBirth'])).isNotEmpty;
+    final hasJob = strField(pickField(user, 'job', ['Job', 'occupation'])).isNotEmpty;
+    return hasBio || hasDob || hasJob ? 'Chỉnh sửa hồ sơ' : 'Tạo hồ sơ của bạn';
+  }
+
+  static final _namePattern = RegExp(r"^[\p{L}\s'.-]+$", unicode: true);
+
+  bool _isValidName(String value) => _namePattern.hasMatch(value.trim());
+
+  bool _isValidPhone(String value) {
+    final p = value.trim();
+    if (p.isEmpty) return true;
+    return RegExp(r'^[0-9]{10,11}$').hasMatch(p);
+  }
+
+  String _normalizeJob(String job) {
+    const allowed = {'student', 'fresher', 'working'};
+    final normalized = job.trim().toLowerCase();
+    if (allowed.contains(normalized)) return normalized;
+    return 'student';
   }
 
   Future<void> _pickAvatar() async {
@@ -165,6 +187,28 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       setState(() => _error = 'Họ và tên là bắt buộc.');
       return;
     }
+    if (!_isValidName(_firstName.text) || !_isValidName(_lastName.text)) {
+      setState(() => _error = 'Chỉ được dùng chữ cái, không số hoặc ký tự đặc biệt.');
+      return;
+    }
+    if (!_isValidPhone(_phone.text)) {
+      setState(() => _error = 'Số điện thoại phải có 10–11 chữ số.');
+      return;
+    }
+    if (_dateOfBirth == null) {
+      setState(() => _error = 'Vui lòng chọn ngày sinh.');
+      return;
+    }
+    final now = DateTime.now();
+    final age = now.year - _dateOfBirth!.year;
+    if (_dateOfBirth!.isAfter(now)) {
+      setState(() => _error = 'Ngày sinh không phù hợp.');
+      return;
+    }
+    if (age < 16) {
+      setState(() => _error = 'Bạn phải từ 16 tuổi trở lên.');
+      return;
+    }
     setState(() {
       _submitting = true;
       _error = null;
@@ -188,7 +232,11 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           backgroundColor: SacoColors.sacoOrange,
         ),
       );
-      context.go('/profile/me');
+      if (context.canPop()) {
+        context.pop(true);
+      } else {
+        context.go('/profile/me');
+      }
     } on ApiException catch (e) {
       setState(() {
         _error = e.message;
@@ -199,11 +247,14 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         _error = e.toString();
         _submitting = false;
       });
+    } finally {
+      if (mounted && _submitting) {
+        setState(() => _submitting = false);
+      }
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildBody(BuildContext context, {required bool isMobile}) {
     final auth = ref.watch(authControllerProvider);
     if (!auth.isLoggedIn) {
       return Center(
@@ -217,24 +268,25 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-
-    return SingleChildScrollView(
+    final form = SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            _pageTitle,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Cập nhật thông tin cá nhân của bạn.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 20),
+          if (!isMobile) ...[
+            Text(
+              _pageTitle,
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Cập nhật thông tin cá nhân của bạn.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 20),
+          ],
           _kycBanner(),
           const SizedBox(height: 20),
           Container(
@@ -299,7 +351,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                         onPressed: _submitting ? null : _submit,
                         style: FilledButton.styleFrom(
                           backgroundColor: SacoColors.sacoOrange,
-                          minimumSize: const Size.fromHeight(48),
+                          minimumSize: const Size(0, 48),
                         ),
                         child: _submitting
                             ? const SizedBox(
@@ -321,6 +373,17 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         ],
       ),
     );
+    return form;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.sizeOf(context).width < 640;
+    final body = _buildBody(context, isMobile: isMobile);
+    if (isMobile) {
+      return TenantSubPageScaffold(title: _pageTitle, body: body);
+    }
+    return body;
   }
 
   Widget _kycBanner() {
@@ -542,6 +605,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         const Text('Giới tính', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
+          key: ValueKey('gender-$_gender'),
           isExpanded: true,
           initialValue: _gender,
           decoration: InputDecoration(
@@ -566,6 +630,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         const Text('Công việc', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
+          key: ValueKey('job-$_job'),
           isExpanded: true,
           initialValue: _job,
           decoration: InputDecoration(

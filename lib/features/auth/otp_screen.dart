@@ -60,7 +60,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
       String returnUrl = storedReturn ?? '/profile-setup';
       if (storedReturn == null) {
         if (role == 'landlord') {
-          returnUrl = '/landlord-profile';
+          returnUrl = '/profile/me';
         }
       }
       _snack('Xác thực thành công!');

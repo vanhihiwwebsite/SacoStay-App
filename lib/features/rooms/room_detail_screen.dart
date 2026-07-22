@@ -432,7 +432,7 @@ class _RoomNetworkImage extends StatelessWidget {
   }
 }
 
-class _GallerySection extends StatelessWidget {
+class _GallerySection extends StatefulWidget {
   const _GallerySection({
     required this.images,
     required this.title,
@@ -446,7 +446,41 @@ class _GallerySection extends StatelessWidget {
   final ValueChanged<int> onIndexChanged;
 
   @override
+  State<_GallerySection> createState() => _GallerySectionState();
+}
+
+class _GallerySectionState extends State<_GallerySection> {
+  late PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: widget.index);
+  }
+
+  @override
+  void didUpdateWidget(covariant _GallerySection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.index != oldWidget.index) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_pageController.hasClients) return;
+        final page = _pageController.page?.round() ?? widget.index;
+        if (page != widget.index) {
+          _pageController.jumpToPage(widget.index);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final images = widget.images;
     if (images.isEmpty) {
       return Container(
         height: 220,
@@ -468,38 +502,13 @@ class _GallerySection extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                _RoomNetworkImage(url: images[index], fit: BoxFit.cover),
-                if (images.length > 1)
-                  Positioned(
-                    left: 8,
-                    top: 0,
-                    bottom: 0,
-                    child: IconButton(
-                      onPressed: () => onIndexChanged(
-                        index <= 0 ? images.length - 1 : index - 1,
-                      ),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.black45,
-                        foregroundColor: Colors.white,
-                      ),
-                      icon: const Icon(Icons.chevron_left),
-                    ),
-                  ),
-                if (images.length > 1)
-                  Positioned(
-                    right: 8,
-                    top: 0,
-                    bottom: 0,
-                    child: IconButton(
-                      onPressed: () =>
-                          onIndexChanged((index + 1) % images.length),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.black45,
-                        foregroundColor: Colors.white,
-                      ),
-                      icon: const Icon(Icons.chevron_right),
-                    ),
-                  ),
+                PageView.builder(
+                  controller: _pageController,
+                  itemCount: images.length,
+                  onPageChanged: widget.onIndexChanged,
+                  itemBuilder: (_, i) =>
+                      _RoomNetworkImage(url: images[i], fit: BoxFit.cover),
+                ),
                 if (images.length > 1)
                   Positioned(
                     bottom: 8,
@@ -514,7 +523,7 @@ class _GallerySection extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        '${index + 1} / ${images.length}',
+                        '${widget.index + 1} / ${images.length}',
                         style: const TextStyle(color: Colors.white, fontSize: 12),
                       ),
                     ),
@@ -532,9 +541,16 @@ class _GallerySection extends StatelessWidget {
               itemCount: images.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
-                final selected = i == index;
+                final selected = i == widget.index;
                 return GestureDetector(
-                  onTap: () => onIndexChanged(i),
+                  onTap: () {
+                    if (i == widget.index) return;
+                    _pageController.animateToPage(
+                      i,
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                    );
+                  },
                   child: Container(
                     width: 72,
                     decoration: BoxDecoration(

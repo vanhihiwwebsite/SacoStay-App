@@ -123,7 +123,7 @@ class _SacoNavbarState extends ConsumerState<SacoNavbar> {
                         role: role,
                         onProfile: () {
                           if (role == 'landlord') {
-                            context.go('/landlord-profile');
+                            context.go('/profile/me');
                           } else {
                             context.go('/profile/me');
                           }

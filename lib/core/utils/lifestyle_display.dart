@@ -2,6 +2,34 @@ import '../../models/lifestyle.dart';
 import '../../models/tenant_room_profile.dart';
 import 'json_normalize.dart';
 
+class RoomQuestionPair {
+  const RoomQuestionPair({
+    required this.lifestyle,
+    this.roomStatus,
+  });
+
+  final List<LifestyleQuestion> lifestyle;
+  final LifestyleQuestion? roomStatus;
+
+  int get expectedAnswerCount => lifestyle.length + (roomStatus != null ? 1 : 0);
+}
+
+/// Lifestyle questions excluding room price; room status goes last — mirror web.
+RoomQuestionPair resolveRoomQuestionPair(List<LifestyleQuestion> questions) {
+  final sorted = [...questions]..sort((a, b) => a.id.compareTo(b.id));
+  LifestyleQuestion? roomStatus;
+  for (final q in sorted) {
+    if (isRoomStatusQuestion(q.content)) {
+      roomStatus = q;
+      break;
+    }
+  }
+  final lifestyle = sorted
+      .where((q) => q.id != roomStatus?.id && !isRoomPriceQuestion(q.content))
+      .toList();
+  return RoomQuestionPair(lifestyle: lifestyle, roomStatus: roomStatus);
+}
+
 bool hasRoomFromAnswers(List<UserLifestyleAnswer> answers) {
   for (final a in answers) {
     final q = a.questionContent.toLowerCase();

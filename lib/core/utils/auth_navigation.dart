@@ -1,6 +1,6 @@
 const createListingPath = '/create-listing';
 
-const tenantAuthPaths = ['/chat'];
+const tenantAuthPaths = ['/chat', '/profile/me'];
 
 bool isTenantAuthPath(String path) {
   final base = path.split('?').first;

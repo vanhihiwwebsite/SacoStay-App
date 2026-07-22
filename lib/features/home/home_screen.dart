@@ -10,6 +10,8 @@ import '../../features/auth/auth_provider.dart';
 import '../../shared/widgets/saco_footer.dart';
 import '../../shared/widgets/saco_logo.dart';
 import '../../shared/widgets/saco_scaffold.dart';
+import '../../shared/widgets/landlord_shell.dart';
+import '../../shared/widgets/tenant_shell.dart';
 import 'home_faq_data.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -37,7 +39,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final isLoggedIn = auth.isLoggedIn;
-    final landlordCtaLink = isLoggedIn ? '/landlord-profile' : '/login';
+    final landlordCtaLink = isLoggedIn ? '/my-listings' : '/login';
     final landlordQuery = isLoggedIn ? null : landlordPostListingQueryParams();
 
     return SacoScaffold(
@@ -65,7 +67,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               landlordLink: landlordCtaLink,
               landlordQuery: landlordQuery,
             ),
-            const SacoFooter(),
+            if (MediaQuery.sizeOf(context).width >= 640) const SacoFooter(),
+            if (TenantShell.shouldUse(context, ref))
+              SizedBox(height: TenantShell.bottomInset(context)),
+            if (LandlordShell.shouldUse(context, ref))
+              SizedBox(height: LandlordShell.bottomInset(context)),
           ],
         ),
       ),

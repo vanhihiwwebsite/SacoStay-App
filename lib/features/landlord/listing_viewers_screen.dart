@@ -18,6 +18,7 @@ import '../../repositories/chat_repository.dart';
 import '../../repositories/lifestyle_repository.dart';
 import '../../repositories/room_post_repository.dart';
 import '../../repositories/tenant_room_repository.dart';
+import '../../shared/widgets/landlord_shell.dart';
 import 'my_listings_screen.dart';
 
 class ViewerDisplayRow {
@@ -289,7 +290,12 @@ class _ListingViewersScreenState extends ConsumerState<ListingViewersScreen> {
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              24 + LandlordShell.bottomInset(context),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -583,7 +589,12 @@ class _ListingViewersScreenState extends ConsumerState<ListingViewersScreen> {
     final displayAnswers = lifestyleAnswersForDisplay(_viewerAnswers);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        8,
+        16,
+        24 + LandlordShell.bottomInset(context),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

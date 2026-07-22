@@ -5,6 +5,7 @@ import '../../config/theme.dart';
 import '../../core/utils/listing_display.dart';
 import '../../models/room_post.dart';
 import '../../repositories/room_post_repository.dart';
+import '../../shared/widgets/landlord_shell.dart';
 import '../../shared/widgets/saco_landlord_ui.dart';
 import '../payment/payment_config.dart';
 import '../payment/payment_launcher.dart';
@@ -230,7 +231,12 @@ class _LandlordPricingScreenState extends ConsumerState<LandlordPricingScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              24 + LandlordShell.bottomInset(context),
+            ),
             child: Text(
               '(*) Các tin VIP sẽ được ưu tiên kiểm duyệt trong thời gian 30–60 phút. Vuốt ngang để xem các gói khác.',
               style: TextStyle(

@@ -8,6 +8,7 @@ import '../../core/utils/listing_display.dart';
 import '../../core/utils/vip_tier.dart';
 import '../../models/room_post.dart';
 import '../../repositories/room_post_repository.dart';
+import '../../shared/widgets/landlord_shell.dart';
 import '../../shared/widgets/saco_landlord_ui.dart';
 import 'widgets/listing_adjust_sheets.dart';
 
@@ -70,11 +71,24 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                         ),
                       ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: SacoPrimaryButton(
                         label: 'Đăng tin mới',
                         fullWidth: true,
                         onPressed: () => context.go('/create-listing'),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: OutlinedButton.icon(
+                        onPressed: () => context.go('/rooms'),
+                        icon: const Icon(Icons.list_alt_outlined, size: 20),
+                        label: const Text('Danh sách phòng trọ chung'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: SacoColors.sacoBlue,
+                          minimumSize: const Size.fromHeight(48),
+                          side: BorderSide(color: Colors.blue.shade200),
+                        ),
                       ),
                     ),
                   ],
@@ -101,7 +115,12 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    0,
+                    16,
+                    24 + LandlordShell.bottomInset(context),
+                  ),
                   sliver: SliverList.separated(
                     itemCount: posts.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 12),

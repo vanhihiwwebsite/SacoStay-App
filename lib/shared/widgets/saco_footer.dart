@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/brand_social.dart';
 import '../../config/theme.dart';
 import 'saco_logo.dart';
 
@@ -31,16 +32,12 @@ class SacoFooter extends StatelessWidget {
             children: [
               _SocialIcon(
                 icon: Icons.facebook,
-                onTap: () => _openUrl(
-                  'https://www.facebook.com/share/1DxyGYWgqn/?mibextid=wwXIfr',
-                ),
+                onTap: () => _openUrl(BrandSocial.facebookUrl),
               ),
               const SizedBox(width: 16),
               _SocialIcon(
                 icon: Icons.music_note_outlined,
-                onTap: () => _openUrl(
-                  'https://www.tiktok.com/@timdungnguoi_chondungnoi',
-                ),
+                onTap: () => _openUrl(BrandSocial.tiktokUrl),
               ),
             ],
           ),

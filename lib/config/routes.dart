@@ -17,7 +17,6 @@ import '../features/discovery/lifestyle_quiz_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/landlord/create_listing_screen.dart';
 import '../features/landlord/landlord_pricing_screen.dart';
-import '../features/landlord/landlord_profile_screen.dart';
 import '../features/landlord/listing_viewers_screen.dart';
 import '../features/landlord/my_listings_screen.dart';
 import '../features/legal/faq_screen.dart';
@@ -180,7 +179,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/lifestyle-quiz',
-        builder: (_, __) => const SacoScaffold(body: LifestyleQuizScreen()),
+        builder: (_, __) => const SacoScaffold(
+          showNavbar: false,
+          body: LifestyleQuizScreen(),
+        ),
       ),
       GoRoute(
         path: '/rooms',
@@ -210,11 +212,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/landlord-profile',
-        builder: (_, __) => const LandlordShell(body: LandlordProfileScreen()),
+        redirect: (_, __) => '/profile/me',
       ),
       GoRoute(
         path: '/my-listings',
-        builder: (_, __) => const LandlordShell(body: MyListingsScreen()),
+        builder: (_, __) => const SacoScaffold(body: MyListingsScreen()),
       ),
       GoRoute(
         path: '/owner/my-posts',
@@ -222,11 +224,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/create-listing',
-        builder: (_, __) => const LandlordShell(body: CreateListingScreen()),
+        builder: (_, __) => const SacoScaffold(body: CreateListingScreen()),
       ),
       GoRoute(
         path: '/landlord-pricing',
-        builder: (_, state) => LandlordShell(
+        builder: (_, state) => SacoScaffold(
           body: LandlordPricingScreen(
             postId: state.uri.queryParameters['postId'] ??
                 state.uri.queryParameters['roomPostId'],
@@ -235,11 +237,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/listing-viewers',
-        builder: (_, __) => const LandlordShell(body: ListingViewersScreen()),
+        builder: (_, __) => const SacoScaffold(body: ListingViewersScreen()),
       ),
       GoRoute(
         path: '/listing-viewers/:id',
-        builder: (_, state) => LandlordShell(
+        builder: (_, state) => SacoScaffold(
           body: ListingViewersScreen(
             initialPostId: state.pathParameters['id'],
           ),
@@ -278,7 +280,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             );
           }
           if (ctx == PaymentContext.landlord) {
-            return LandlordShell(
+            return SacoScaffold(
               body: PaymentCheckoutScreen(
                 package: pkg,
                 contextType: ctx,
@@ -309,7 +311,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             postId: state.uri.queryParameters['postId'],
           );
           if (ctx == PaymentContext.landlord) {
-            return LandlordShell(body: body);
+            return SacoScaffold(body: body);
           }
           return SacoScaffold(body: body);
         },
@@ -320,7 +322,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/profile-setup',
-        builder: (_, __) => const SacoScaffold(body: ProfileSetupScreen()),
+        builder: (_, __) => const SacoScaffold(
+          showNavbar: false,
+          body: ProfileSetupScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/profile/me/detail',
+        builder: (_, __) => const SacoScaffold(
+          showNavbar: false,
+          body: UserProfileScreen(detailOnly: true),
+        ),
       ),
       GoRoute(
         path: '/profile/me',
@@ -342,7 +354,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/faq',
-        builder: (_, __) => const SacoScaffold(body: FaqScreen()),
+        builder: (_, __) => const SacoScaffold(showNavbar: false, body: FaqScreen()),
       ),
       GoRoute(
         path: '/faq/:id',
@@ -368,7 +380,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/terms',
-        builder: (_, __) => const SacoScaffold(body: TermsScreen()),
+        builder: (_, __) => const SacoScaffold(showNavbar: false, body: TermsScreen()),
       ),
       GoRoute(path: '/privacy', redirect: (_, __) => '/terms'),
       GoRoute(path: '/pricing', redirect: (_, __) => '/tenant-pricing'),

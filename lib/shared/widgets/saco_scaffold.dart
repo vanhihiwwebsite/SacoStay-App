@@ -6,6 +6,9 @@ import '../../config/theme.dart';
 import '../providers/mobile_menu_provider.dart';
 import 'saco_navbar.dart';
 
+import 'tenant_shell.dart';
+import 'landlord_shell.dart';
+
 /// App shell: sticky navbar + scrollable body (footer lives inside page scroll).
 class SacoScaffold extends ConsumerWidget {
   const SacoScaffold({
@@ -19,6 +22,18 @@ class SacoScaffold extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!showNavbar) {
+      return body;
+    }
+
+    if (TenantShell.shouldUse(context, ref)) {
+      return TenantShell(body: body);
+    }
+
+    if (LandlordShell.shouldUse(context, ref)) {
+      return LandlordShell(body: body);
+    }
+
     final currentPath = GoRouterState.of(context).uri.path;
     final isDiscovery = currentPath == '/discovery';
     final discoveryMenuOpen =

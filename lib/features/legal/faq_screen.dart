@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/theme.dart';
 import '../../data/faq_data.dart';
+import '../../shared/widgets/legal_mobile_widgets.dart';
+import '../../shared/widgets/tenant_sub_page_scaffold.dart';
 
 class FaqScreen extends StatefulWidget {
   const FaqScreen({super.key});
@@ -14,111 +16,148 @@ class FaqScreen extends StatefulWidget {
 class _FaqScreenState extends State<FaqScreen> {
   String? _expandedId;
 
+  IconData _iconFor(String id) => switch (id) {
+        'pricing' => Icons.payments_outlined,
+        'roommate-matching' => Icons.favorite_outline,
+        'verified-listings' => Icons.verified_outlined,
+        'contact-landlord' => Icons.chat_outlined,
+        'roommate-support' => Icons.support_agent_outlined,
+        _ => Icons.help_outline,
+      };
+
+  Color _colorFor(String id) => switch (id) {
+        'pricing' => SacoColors.sacoOrange,
+        'roommate-matching' => const Color(0xFFEC4899),
+        'verified-listings' => const Color(0xFF10B981),
+        'contact-landlord' => SacoColors.sacoBlue,
+        'roommate-support' => const Color(0xFF8B5CF6),
+        _ => SacoColors.sacoOrange,
+      };
+
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    final isMobile = MediaQuery.sizeOf(context).width < 640;
+    final content = SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          LegalHero(
-            badge: 'Hỗ trợ · SacoStay',
-            title: 'Câu hỏi thường gặp (FAQ)',
-            subtitle: 'Giải đáp nhanh các thắc mắc phổ biến và dẫn bạn đến trang thông tin chi tiết.',
-          ),
+          if (isMobile)
+            const LegalMobileHeader(
+              badge: 'Hỗ trợ · SacoStay',
+              title: 'Câu hỏi thường gặp',
+              subtitle: 'Giải đáp nhanh các thắc mắc phổ biến khi dùng SacoStay.',
+              icon: Icons.quiz_outlined,
+            )
+          else
+            const LegalHero(
+              badge: 'Hỗ trợ · SacoStay',
+              title: 'Câu hỏi thường gặp (FAQ)',
+              subtitle: 'Giải đáp nhanh các thắc mắc phổ biến và dẫn bạn đến trang thông tin chi tiết.',
+            ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade100),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  ...faqItems.map((item) {
-                    final open = _expandedId == item.id;
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.orange.shade100),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        children: [
-                          InkWell(
-                            onTap: () => setState(() {
-                              _expandedId = open ? null : item.id;
-                            }),
-                            borderRadius: BorderRadius.circular(12),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      item.question,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: SacoColors.sacoBlue,
-                                      ),
-                                    ),
+            padding: EdgeInsets.fromLTRB(16, isMobile ? 0 : 0, 16, 24),
+            child: Column(
+              children: [
+                ...faqItems.map((item) {
+                  final open = _expandedId == item.id;
+                  final color = _colorFor(item.id);
+                  return LegalInfoCard(
+                    icon: _iconFor(item.id),
+                    iconColor: color,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        InkWell(
+                          onTap: () => setState(() {
+                            _expandedId = open ? null : item.id;
+                          }),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item.question,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                    height: 1.35,
                                   ),
-                                  Text(
-                                    open ? '−' : '+',
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      color: SacoColors.sacoOrange,
-                                    ),
-                                  ),
-                                ],
+                                ),
+                              ),
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: open
+                                      ? color.withValues(alpha: 0.15)
+                                      : Colors.grey.shade100,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  open ? Icons.remove : Icons.add,
+                                  size: 18,
+                                  color: open ? color : Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (open) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              item.shortAnswer,
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                height: 1.55,
+                                fontSize: 14,
                               ),
                             ),
                           ),
-                          if (open)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.shortAnswer,
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  TextButton(
-                                    onPressed: () => context.go('/faq/${item.id}'),
-                                    child: Text('${item.ctaLabel} →'),
-                                  ),
-                                ],
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => context.go('/faq/${item.id}'),
+                              icon: Icon(Icons.arrow_forward, size: 16, color: color),
+                              label: Text(
+                                item.ctaLabel,
+                                style: TextStyle(color: color, fontWeight: FontWeight.w600),
                               ),
                             ),
+                          ),
                         ],
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 16),
-                  OutlinedButton(
-                    onPressed: () => context.go('/'),
-                    child: const Text('Về trang chủ'),
-                  ),
-                ],
-              ),
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => context.go('/profile/me'),
+                  icon: const Icon(Icons.person_outline, size: 18),
+                  label: const Text('Quay lại Cá nhân'),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
+
+    if (isMobile) {
+      return TenantSubPageScaffold(
+        title: 'FAQ',
+        fallbackRoute: '/profile/me',
+        body: content,
+      );
+    }
+    return content;
   }
 }
 
@@ -240,6 +279,7 @@ class FaqDetailScreen extends StatelessWidget {
 
 class LegalHero extends StatelessWidget {
   const LegalHero({
+    super.key,
     required this.badge,
     required this.title,
     required this.subtitle,

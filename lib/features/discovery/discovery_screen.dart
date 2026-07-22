@@ -4,13 +4,27 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/theme.dart';
 import '../../core/api/api_exception.dart';
+import '../../core/storage/guest_discovery_storage.dart';
 import '../../core/utils/discovery_filters.dart';
+import '../../core/utils/user_display.dart';
+import '../../features/auth/auth_provider.dart';
+import '../../shared/widgets/tenant_shell.dart';
 import '../../core/utils/lifestyle_display.dart';
 import '../../core/utils/media_url.dart';
 import '../../models/lifestyle.dart';
 import '../../repositories/lifestyle_repository.dart';
 import 'widgets/discovery_filter_panel.dart';
 import 'widgets/tenant_room_details_view.dart';
+
+/// Chỉnh vị trí dọc của thẻ người dùng + 4 nút (Yêu thích / Bỏ qua / Thích / Hồ sơ).
+/// Giảm → đẩy xuống dưới; tăng → đẩy lên trên (đơn vị: px).
+const _kDiscoveryDeckBottomOffset = 40.0;
+
+/// Thêm chiều cao thẻ người dùng (px).
+const _kDiscoveryCardExtraHeight = 30.0;
+
+/// Vị trí dọc nút lọc so với góc trên phải thẻ (âm = lên trên).
+const _kDiscoveryFilterTopOffset = -55.0;
 
 class DiscoveryScreen extends ConsumerStatefulWidget {
   const DiscoveryScreen({super.key});
@@ -22,6 +36,7 @@ class DiscoveryScreen extends ConsumerStatefulWidget {
 class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   bool _loading = true;
   bool _needsQuiz = false;
+  bool _isGuest = false;
   bool _deckEmpty = false;
   List<DiscoveryCard> _deck = [];
   List<DiscoveryCard> _allCards = [];
@@ -51,8 +66,28 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
 
   Future<void> _bootstrap() async {
     setState(() => _loading = true);
-    final repo = ref.read(lifestyleRepositoryProvider);
-    final completed = await repo.hasCompletedQuiz();
+    final auth = ref.read(authControllerProvider);
+
+    if (!auth.isLoggedIn) {
+      final guestStorage = await GuestDiscoveryStorage.create();
+      if (!guestStorage.hasQuizCompleted) {
+        setState(() {
+          _needsQuiz = true;
+          _isGuest = true;
+          _loading = false;
+        });
+        return;
+      }
+      setState(() => _isGuest = true);
+      await _loadDeck();
+      return;
+    }
+
+    _isGuest = false;
+    final uid = userIdFromUser(auth.user?.raw);
+    final completed = uid != null
+        ? await ref.read(lifestyleRepositoryProvider).ensureQuizCompleted(uid)
+        : await ref.read(lifestyleRepositoryProvider).hasCompletedQuiz();
     if (!completed) {
       setState(() {
         _needsQuiz = true;
@@ -67,9 +102,31 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     final repo = ref.read(lifestyleRepositoryProvider);
     setState(() => _loading = true);
     try {
-      final deck = await repo.getSwipeDeck(limit: 50, includeSwiped: true);
-      final wishlist = await repo.getMyLikes();
-      final quota = await repo.getSwipeQuota();
+      List<SwipeDeckCard> deck;
+      if (_isGuest) {
+        final guestStorage = await GuestDiscoveryStorage.create();
+        final optionIds = guestStorage.selectedOptionIds;
+        deck = await repo.getGuestSwipeDeck(
+          selectedOptionIds: optionIds,
+          limit: 50,
+          includeSwiped: true,
+        );
+      } else {
+        deck = await repo.getSwipeDeck(limit: 50, includeSwiped: true);
+      }
+
+      List<WishlistItem> wishlist = [];
+      SwipeQuota quota = const SwipeQuota(
+        isPremium: false,
+        weeklyLimit: 5,
+        usedThisWeek: 0,
+        remaining: 5,
+        weekResetAt: '',
+      );
+      if (!_isGuest) {
+        wishlist = await repo.getMyLikes();
+        quota = await repo.getSwipeQuota();
+      }
       final enriched = await Future.wait(deck.map(repo.enrichCard));
       enriched.sort((a, b) => b.matchingScore.compareTo(a.matchingScore));
       setState(() {
@@ -202,7 +259,15 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_needsQuiz) return _QuizGate(onStart: () => context.go('/lifestyle-quiz?returnUrl=/discovery'));
+    if (_needsQuiz) {
+      return _QuizGate(
+        isGuest: _isGuest,
+        onStart: () {
+          final guest = _isGuest ? '&guest=1' : '';
+          context.go('/lifestyle-quiz?returnUrl=${Uri.encodeComponent('/discovery')}$guest');
+        },
+      );
+    }
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -265,87 +330,113 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                 ),
               ),
             Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: GestureDetector(
-                    onTap: () {
-                      if (card.profileImageUrls.length > 1) {
-                        setState(() {
-                          _photoIndex =
-                              (_photoIndex + 1) % card.profileImageUrls.length;
-                        });
-                      }
-                    },
-                    onHorizontalDragUpdate: (d) {
-                      if (_swipeAnimating) return;
-                      setState(() => _dragX += d.delta.dx);
-                    },
-                    onHorizontalDragEnd: (d) {
-                      if (_swipeAnimating) return;
-                      if (_dragX > 80) {
-                        _commitSwipe(true);
-                      } else if (_dragX < -80) {
-                        _commitSwipe(false);
-                      } else {
-                        setState(() => _dragX = 0);
-                      }
-                    },
-                    child: Transform.translate(
-                      offset: Offset(_dragX, 0),
-                      child: Transform.rotate(
-                        angle: (_dragX * 0.001).clamp(-0.2, 0.2),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 540),
-                          child: AspectRatio(
-                            aspectRatio: 0.75,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(24),
-                                  child: Image.network(
-                                    cardImage,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      color: SacoColors.sacoOrange.withValues(alpha: 0.2),
-                                      alignment: Alignment.center,
-                                      child: Text(
-                                        card.displayName.isNotEmpty
-                                            ? card.displayName[0]
-                                            : '?',
-                                        style: const TextStyle(
-                                          fontSize: 64,
-                                          fontWeight: FontWeight.bold,
-                                          color: SacoColors.sacoOrange,
-                                        ),
-                                      ),
-                                    ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final bottomPad =
+                      MediaQuery.paddingOf(context).bottom + _kDiscoveryDeckBottomOffset;
+                  const actionBlockHeight = 88.0;
+                  const stackGap = 14.0;
+                  const filterPad = 12.0;
+                  final maxCardHeight = (constraints.maxHeight -
+                          bottomPad -
+                          actionBlockHeight -
+                          stackGap -
+                          filterPad)
+                      .clamp(240.0, 460.0);
+
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Stack(
+                          clipBehavior: Clip.none,
+                          alignment: Alignment.topRight,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12, right: 12),
+                              child: GestureDetector(
+                            onTap: () {
+                              if (card.profileImageUrls.length > 1) {
+                                setState(() {
+                                  _photoIndex =
+                                      (_photoIndex + 1) % card.profileImageUrls.length;
+                                });
+                              }
+                            },
+                            onHorizontalDragUpdate: (d) {
+                              if (_swipeAnimating) return;
+                              setState(() => _dragX += d.delta.dx);
+                            },
+                            onHorizontalDragEnd: (d) {
+                              if (_swipeAnimating) return;
+                              if (_dragX > 80) {
+                                _commitSwipe(true);
+                              } else if (_dragX < -80) {
+                                _commitSwipe(false);
+                              } else {
+                                setState(() => _dragX = 0);
+                              }
+                            },
+                            child: Transform.translate(
+                              offset: Offset(_dragX, 0),
+                              child: Transform.rotate(
+                                angle: (_dragX * 0.001).clamp(-0.2, 0.2),
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: 400,
+                                    maxHeight: maxCardHeight + _kDiscoveryCardExtraHeight,
                                   ),
-                                ),
-                                if (card.profileImageUrls.length > 1)
-                                  Positioned(
-                                    top: 12,
-                                    left: 12,
-                                    right: 12,
-                                    child: Row(
-                                      children: List.generate(
-                                        card.profileImageUrls.length,
-                                        (i) => Expanded(
-                                          child: Container(
-                                            height: 3,
-                                            margin: const EdgeInsets.symmetric(horizontal: 2),
-                                            decoration: BoxDecoration(
-                                              color: i == _photoIndex
-                                                  ? Colors.white
-                                                  : Colors.white.withValues(alpha: 0.35),
-                                              borderRadius: BorderRadius.circular(2),
+                                  child: AspectRatio(
+                                    aspectRatio: 0.75,
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(24),
+                                          child: Image.network(
+                                            cardImage,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Container(
+                                              color: SacoColors.sacoOrange.withValues(alpha: 0.2),
+                                              alignment: Alignment.center,
+                                              child: Text(
+                                                card.displayName.isNotEmpty
+                                                    ? card.displayName[0]
+                                                    : '?',
+                                                style: const TextStyle(
+                                                  fontSize: 64,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: SacoColors.sacoOrange,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ),
-                                  ),
+                                        if (card.profileImageUrls.length > 1)
+                                          Positioned(
+                                            top: 12,
+                                            left: 12,
+                                            right: 12,
+                                            child: Row(
+                                              children: List.generate(
+                                                card.profileImageUrls.length,
+                                                (i) => Expanded(
+                                                  child: Container(
+                                                    height: 3,
+                                                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: i == _photoIndex
+                                                          ? Colors.white
+                                                          : Colors.white.withValues(alpha: 0.35),
+                                                      borderRadius: BorderRadius.circular(2),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                 Container(
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(24),
@@ -502,85 +593,110 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                       ),
                     ),
                   ),
-                ),
+                        ),
+                        Positioned(
+                          top: _kDiscoveryFilterTopOffset,
+                          right: 0,
+                          child: Material(
+                          elevation: 8,
+                          shadowColor: SacoColors.sacoOrangeDark.withValues(alpha: 0.5),
+                          color: SacoColors.sacoOrangeDark,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () => setState(() {
+                              _showFilters = true;
+                              _showWishlist = false;
+                              _showProfile = false;
+                            }),
+                            child: const Padding(
+                              padding: EdgeInsets.all(11),
+                              child: Icon(
+                                Icons.tune_rounded,
+                                color: Colors.white,
+                                size: 23,
+                              ),
+                            ),
+                          ),
+                        ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(4, 0, 4, bottomPad),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Center(
+                              child: _LabeledAction(
+                                label: 'Yêu thích (${_wishlist.length})',
+                                color: const Color(0xFFE53935),
+                                icon: Icons.favorite_border,
+                                size: 44,
+                                compactLabel: true,
+                                onTap: () => setState(() {
+                                  _showWishlist = true;
+                                  _showProfile = false;
+                                }),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Center(
+                              child: _LabeledAction(
+                                label: 'Bỏ qua',
+                                color: const Color(0xFFFFBD59),
+                                icon: Icons.close,
+                                size: 50,
+                                compactLabel: true,
+                                onTap: () => _commitSwipe(false),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: TenantShell.fabClearanceWidth),
+                          Expanded(
+                            child: Center(
+                              child: _LabeledAction(
+                                label: 'Gửi lượt thích',
+                                color: const Color(0xFF2ECC71),
+                                icon: Icons.favorite,
+                                size: 56,
+                                filled: true,
+                                compactLabel: true,
+                                onTap: () => _commitSwipe(true),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Center(
+                              child: _LabeledAction(
+                                label: 'Hồ sơ',
+                                color: SacoColors.sacoOrange,
+                                icon: Icons.person_outline,
+                                size: 44,
+                                compactLabel: true,
+                                onTap: () {
+                                  if (_current == null) return;
+                                  setState(() {
+                                    _showProfile = true;
+                                    _showWishlist = false;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _LabeledAction(
-                    label: 'Bỏ qua',
-                    color: const Color(0xFFFFBD59),
-                    icon: Icons.close,
-                    size: 52,
-                    onTap: () => _commitSwipe(false),
-                  ),
-                  const SizedBox(width: 32),
-                  _LabeledAction(
-                    label: 'Gửi lượt thích',
-                    color: const Color(0xFF2ECC71),
-                    icon: Icons.favorite,
-                    size: 60,
-                    filled: true,
-                    onTap: () => _commitSwipe(true),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 56),
           ],
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: Material(
-            elevation: 8,
-            color: Colors.white.withValues(alpha: 0.96),
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _BottomNavButton(
-                        label: 'Yêu thích (${_wishlist.length})',
-                        icon: Icons.favorite_border,
-                        onTap: () => setState(() {
-                          _showWishlist = true;
-                          _showProfile = false;
-                        }),
-                      ),
-                    ),
-                    Expanded(
-                      child: _BottomNavButton(
-                        label: 'Bộ lọc',
-                        icon: Icons.tune,
-                        onTap: () => setState(() {
-                          _showFilters = true;
-                          _showWishlist = false;
-                          _showProfile = false;
-                        }),
-                      ),
-                    ),
-                    Expanded(
-                      child: _BottomNavButton(
-                        label: 'Hồ sơ',
-                        icon: Icons.person_outline,
-                        onTap: () => setState(() {
-                          _showProfile = true;
-                          _showWishlist = false;
-                        }),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
         ),
         if (_tenantRoomCard != null)
           _TenantRoomPopup(
@@ -645,41 +761,104 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
 }
 
 class _QuizGate extends StatelessWidget {
-  const _QuizGate({required this.onStart});
+  const _QuizGate({required this.onStart, this.isGuest = false});
 
   final VoidCallback onStart;
+  final bool isGuest;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.favorite, size: 48, color: SacoColors.sacoOrange),
-            const SizedBox(height: 16),
-            const Text(
-              'Trắc nghiệm lối sống',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+    final bottomPad = TenantShell.bottomInset(context);
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(24, 24, 24, bottomPad),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(height: 24),
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Hoàn thành trắc nghiệm để tìm bạn ở ghép phù hợp gu của bạn.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600),
+            child: Icon(Icons.favorite, size: 40, color: SacoColors.sacoOrange),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Trắc nghiệm lối sống',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            isGuest
+                ? 'Để tìm bạn ở ghép phù hợp, bạn cần hoàn thành trắc nghiệm lối sống trước nhé!'
+                : 'Hoàn thành trắc nghiệm để tìm bạn ở ghép phù hợp gu của bạn.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade600, height: 1.45),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange.shade100),
             ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: onStart,
-              style: FilledButton.styleFrom(
-                backgroundColor: SacoColors.sacoOrange,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-              ),
-              child: const Text('Bắt đầu trắc nghiệm'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Quy trình matching trên SacoStay',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                _step('Trả lời trắc nghiệm về thói quen sinh hoạt và lối sống'),
+                _step('Hệ thống tính % hòa hợp với từng người thuê trọ khác'),
+                _step('Lướt thẻ — thích người bạn cảm thấy phù hợp, bỏ qua nếu chưa hợp'),
+                _step('Khi cả hai thích nhau (match), mở Tin nhắn và tạo không gian chung'),
+                if (isGuest)
+                  _step('Đăng ký tài khoản để lưu kết quả, kết nối và tiếp tục tìm bạn'),
+              ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: onStart,
+            style: FilledButton.styleFrom(
+              backgroundColor: SacoColors.sacoOrange,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+            ),
+            child: const Text('Bắt đầu trắc nghiệm'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _step(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('• ', style: TextStyle(color: Colors.grey.shade700)),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -727,6 +906,7 @@ class _LabeledAction extends StatelessWidget {
     required this.onTap,
     this.size = 56,
     this.filled = false,
+    this.compactLabel = false,
   });
 
   final String label;
@@ -735,72 +915,46 @@ class _LabeledAction extends StatelessWidget {
   final VoidCallback onTap;
   final double size;
   final bool filled;
+  final bool compactLabel;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        children: [
-          Material(
-            elevation: 4,
-            shape: const CircleBorder(),
-            color: Colors.white,
-            child: InkWell(
-              onTap: onTap,
-              customBorder: const CircleBorder(),
-              child: SizedBox(
-                width: size,
-                height: size,
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: filled ? 32 : 26,
+      child: SizedBox(
+        width: compactLabel ? 72 : null,
+        child: Column(
+          children: [
+            Material(
+              elevation: 4,
+              shape: const CircleBorder(),
+              color: filled ? color : Colors.white,
+              child: InkWell(
+                onTap: onTap,
+                customBorder: const CircleBorder(),
+                child: SizedBox(
+                  width: size,
+                  height: size,
+                  child: Icon(
+                    icon,
+                    color: filled ? Colors.white : color,
+                    size: filled ? 28 : 24,
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade600,
-              fontWeight: filled ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomNavButton extends StatelessWidget {
-  const _BottomNavButton({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 20, color: Colors.grey.shade700),
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
             Text(
               label,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: compactLabel ? 9.5 : 11,
+                color: Colors.grey.shade600,
+                fontWeight: filled ? FontWeight.bold : FontWeight.normal,
+                height: 1.2,
+              ),
             ),
           ],
         ),
@@ -824,19 +978,21 @@ class _ProfileSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPad = TenantShell.bottomInset(context);
     return Material(
       color: Colors.black54,
       child: Column(
         children: [
-          const Spacer(),
+          const Spacer(flex: 3),
           Material(
             color: Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
             clipBehavior: Clip.antiAlias,
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomPad),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     children: [
